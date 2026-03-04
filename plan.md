@@ -1,62 +1,164 @@
-Here is a high-level, phased implementation plan. True to your request, this plan focuses entirely on **what** needs to be built and **why**, leaving the **how** (the specific libraries, design patterns, and exact code implementations) entirely up to you to discover and decide during development.
+## Implementation Plan: AI Resume Tailor
 
-I have structured this to prioritize a concise, easily debuggable, and highly maintainable codebase.
+This plan defines the build sequence, safety controls, workflow gates, and verification criteria.
 
----
+### Phase 0: Repo Safety and Scaffolding
 
-### 🗺️ Implementation Plan: AI Resume Tailor
+Goal: establish privacy and module boundaries before implementation work.
 
-#### Phase 1: The Foundation & Observability
+1. Add and verify privacy guardrails for personal data in `knowledge/`.
+2. Keep personal knowledge files out of version control using `knowledge/.gitignore`:
+   - ignore `knowledge/*.md`
+   - allow only `knowledge/*.example.md` templates for shareable setup
+3. Document sensitive-data handling requirements:
+   - do not log API keys or raw secrets
+   - redact personally sensitive fields in logs when feasible
+4. Define initial module layout and responsibilities:
+   - `main.py`: CLI entrypoint and argument parsing
+   - `workflow.py`: orchestration across all stages
+   - `prompt_loader.py`: prompt + frontmatter loading, knowledge resolution
+   - `llm_client.py`: Gemini API wrapper and async request execution
+   - `json_parser.py`: response cleanup, normalization, and schema validation
+   - `retrospective_ui.py`: Human-in-the-Loop review and user decisions
+   - `document_builder.py`: DOCX placeholder replacement and export
 
-*Goal: Establish the project skeleton and ensure every action the system takes is visible and easy to debug.*
+### Phase 1: Configuration and Logging Foundation
 
-* **Step 1: Environment Setup:** Initialize your repository and dependency management system.
-* **Step 2: Centralized Logging System:** Before writing any business logic, implement a robust logger.
-* *Requirement:* It should write to both the console (for quick feedback) and a local `.log` file (for post-mortem debugging).
-* *Requirement:* Establish clear log levels: `INFO` for general milestones (e.g., "Starting API call"), `DEBUG` for heavy data (e.g., raw JSON payloads from the AI), and `ERROR` for stack traces.
+Goal: ensure traceability and secure runtime configuration.
 
+1. Implement environment/config loading for API credentials and runtime settings.
+2. Define CLI input contract for Job Description ingestion:
+   - user provides JD as a file path in console
+   - accepted input file types: `.txt` and `.docx`
+   - input may include links and all relevant context inline in the JD file
+3. Implement dual logging sink:
+   - console output for live workflow progress
+   - local `.log` file for diagnostics and post-mortem analysis
+4. Enforce log levels:
+   - `INFO`: phase/stage start, completion, user decisions, output files
+   - `DEBUG`: prompt metadata, referenced knowledge files, request/response metadata
+   - `ERROR`: parse/validation failures with stack traces and payload snippets
+5. Add log redaction policy:
+   - never log API keys
+   - mask or truncate sensitive user data and long freeform content
+6. Define workflow run-folder convention for all artifacts:
+   - create one folder per workflow run
+   - folder name format: `YY.MM.DD Company` (example: `26.02.27 Microsoft`)
+   - all generated outputs, logs, and saved responses for that run live in this folder
 
-* **Step 3: Configuration Management:** Create a mechanism to securely load your API keys and environment variables without hardcoding them.
+### Phase 2: Prompt and Context Ingestion (Frontmatter)
 
-#### Phase 2: Data & Prompt Ingestion
+Goal: replace generic prompt loading with explicit frontmatter-driven context isolation.
 
-*Goal: Build the system's ability to read inputs while keeping data completely separate from the execution code.*
+1. Load prompts as Markdown files with YAML frontmatter.
+2. Parse `knowledge_files` from each prompt frontmatter.
+3. Load only files referenced by `knowledge_files` for that specific prompt.
+4. Fail fast with actionable errors for:
+   - missing prompt files
+   - malformed YAML frontmatter
+   - missing referenced knowledge files
+5. Add mapping rules for prompt file -> output section key.
 
-* **Step 1: File Reader:** Implement a simple, generic utility to read text from your static files (Job Description, Accomplishments, Skills).
-* **Step 2: Prompt Manager:** Build a mechanism to load your external prompt instructions (from your `.txt` or `.yaml` files).
-* **Step 3: Template Injector (Text Prep):** Create a function that dynamically inserts the text from Step 1 into the prompts from Step 2 before they are sent to the AI. *Log the final assembled prompt at the `DEBUG` level.*
+### Phase 3: AI Client and Response Normalization/Validation
 
-#### Phase 3: The AI Engine & Concurrency
+Goal: make API interaction robust and deterministic even with malformed model output.
 
-*Goal: Handle the external API calls efficiently and cleanly, expecting that the AI will occasionally fail or return bad data.*
+1. Implement async Gemini wrapper that returns raw response text plus metadata.
+2. Normalize every model response before `json.loads()`:
+   - strip markdown fences (for example ```json ... ```)
+   - trim stray leading/trailing text around JSON
+   - sanitize common malformed JSON patterns
+3. Validate universal response envelope for every prompt:
+   - root contains `variations`
+   - each variation contains:
+     - `id`
+     - `score_0_to_5`
+     - `ai_reasoning`
+     - `content_for_template`
+4. On malformed payload:
+   - log parsing/validation failure at `ERROR` with traceback and snippet
+   - return a controlled section-level failure object (no process crash)
+   - allow targeted retry policy per section
 
-* **Step 1: The API Wrapper:** Create a single, isolated module responsible for talking to the AI. If the API ever changes, this is the only file you should need to update.
-* **Step 2: Concurrent Execution:** Implement the mechanism to dispatch multiple prompts at the exact same time rather than waiting for one to finish.
-* **Step 3: Response Validation:** Build a strict validation layer. When the AI returns its data, the system must verify it matches your expected format. *If it fails, log the exact malformed output as an `ERROR` and handle the failure gracefully.*
+### Phase 4: Orchestration With Stage Gates
 
-#### Phase 4: The Workflow & Human-in-the-Loop
+Goal: implement explicit staged execution with a required user gate.
 
-*Goal: Orchestrate the sequence of events and build the pause-and-review mechanism.*
+1. Stage 1 (sequential triage):
+   - run only `00_job_description_analysis.md`
+   - present formatted triage response in console (easy to scan and decide)
+   - require explicit user input to continue
+2. Gate behavior:
+   - continue only when user enters exact confirmation (`Go`)
+   - close workflow gracefully on any non-`Go` input
+3. Stage 2 (parallel generation):
+   - run `01` to `06` concurrently with `asyncio`
+4. Failure policy for Stage 2:
+   - parser/validation failure in one section does not automatically crash other sections
+   - failed sections surface retry choice to user
+   - define when to abort full pipeline (for example repeated hard failures)
+5. Stage 3 (optional critique loop):
+   - `07_constructive_criticism.md` is not required for default pipeline completion
+   - support as optional post-generation QA mode:
+     - user provides file path to the newly created CV
+     - critique selected draft
+     - user decides whether to apply critique
+     - regenerate only targeted sections when requested
+   - console should recognize critique/review request and route it to this mode
 
-* **Step 1: The Orchestrator:** Write the main workflow script that calls the ingestion, triggers the AI engine, and collects all the responses. Keep this file extremely concise—it should read like a table of contents, delegating the actual work to other modules.
-* **Step 2: Retrospective Presentation:** Build the interface to display the generated variations clearly to the user.
-* **Step 3: User Input Handling:** Capture the user's choices (or manual edits) for each section. *Log the final user selections at the `INFO` level to confirm what data is moving to the final stage.*
+### Phase 5: Human-in-the-Loop Retrospective and Selection
 
-#### Phase 5: Document Assembly
+Goal: provide explicit review UX for safe user-controlled final content.
 
-*Goal: Safely inject the finalized text into the Word document.*
+1. For each section, display:
+   - section name
+   - variation id
+   - score
+   - ai reasoning
+   - generated content
+2. Allow user actions per section:
+   - choose a variation
+   - edit selected content
+   - retry that section generation
+3. Log final user decisions at `INFO`.
+4. Persist normalized selected content map for downstream output assembly.
+5. Persist every LLM response in readable files inside the run folder:
+   - one file per prompt/stage
+   - include raw text and normalized JSON for review/debugging
 
-* **Step 1: Template Parsing:** Build the logic to open your specific `.docx` template and locate your unique placeholders.
-* **Step 2: Text Injection:** Swap the placeholders with the user-selected text blocks.
-* **Step 3: Export & Clean Up:** Save the newly modified document with a dynamic filename. *Log the exact file path where the completed document was saved.*
+### Phase 6: Output Assembly (CV DOCX and Cover Letter Export)
 
----
+Goal: produce deterministic artifacts while preserving the base template.
 
-### 📐 Guiding Principles for Your Codebase
+1. Map selected content to supported DOCX placeholders:
+   - `{{01_professional_summary}}`
+   - `{{02_work_experience_1}}`
+   - `{{03_work_experience_2}}`
+   - `{{04_work_experience_3}}`
+   - `{{05_skills_alignment}}`
+2. Export CV from template without modifying the original template file.
+3. Handle `06_cover_letter` as separate output file (for example `.md`) unless template placeholders are extended.
+4. Define persistence for critique output (`07_constructive_criticism`) when used:
+   - store as optional QA artifact
+   - do not inject into CV template placeholders
+5. Log final output file paths at `INFO` and keep them inside the run folder.
 
-As you figure out *how* to implement the above, stick to these rules to keep it simple and maintainable:
+### Phase 7: Tests, Lint, Format, Final Verification
 
-1. **The Single Responsibility Principle:** If a function is validating JSON, it should not also be writing to the Word document. Keep functions short and focused on one task.
-2. **Defensive Programming:** Never trust the AI's output. Always assume the AI might send back weird formatting, extra text, or missing keys. Handle these edge cases before they crash your document builder.
-3. **Traceable State:** If the script fails at Phase 5, your log file should clearly show exactly what data was passed from Phase 1, 2, 3, and 4. You should never have to guess what the variables contained at the moment of failure.
-4. **No "Clever" Code:** Write boring, highly readable code. Avoid overly complex one-liners or deeply nested loops. Six months from now, when you need to update the tool for a new job hunt, you will thank yourself for keeping the logic straightforward.
+Goal: enforce deterministic quality checks before completion.
+
+1. Implement deterministic tests only (no live LLM quality assertions):
+   - JSON parser tests with dirty payload fixtures
+   - DOCX placeholder replacement tests with dummy strings
+   - prompt frontmatter parser tests (`knowledge_files` success/failure)
+   - mapping tests (prompt filename -> output key -> placeholder)
+2. Run required quality gate commands in strict order:
+   1. `black .`
+   2. `ruff check . --fix`
+   3. `pytest`
+3. Completion criteria:
+   - all required stages pass
+   - selected content map is complete for expected sections
+   - output files are generated successfully
+   - base template remains unchanged
+   - failures are traceable in logs with actionable context

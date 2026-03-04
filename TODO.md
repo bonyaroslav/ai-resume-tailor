@@ -1,109 +1,105 @@
-# TODO: `plan.md` Upgrade Checklist
+# TODO: Pre-Implementation Clarifications (Priority Ordered)
 
-## 1) Add Phase 0: Repo Safety and Scaffolding
-- Add a first phase for repository safety before implementation work.
-- Include privacy guardrails:
-  - Ensure personal data handling is explicit.
-  - Add/confirm `knowledge/` exclusion in `.gitignore`.
-  - Add `knowledge/*.example.md` template strategy for shareable repo setup.
-- Define initial module layout to match AGENTS guidance:
-  - `main.py`
-  - `llm_client.py`
-  - `document_builder.py`
-  - `retrospective_ui.py`
-  - `prompt_loader.py`
-  - `json_parser.py`
-  - `workflow.py`
+## 1) Lock Exact CLI Input Contract
+- Risk: input behavior is still ambiguous at implementation time.
+- Decide:
+  - exact command(s) and flags (`--jd-path`, `--company`, `--mode review`, etc.)
+  - which args are required vs optional
+  - validation/error messages for missing/invalid values
+- Recommended:
+  - fail before any prompt loading when contract is violated
+  - support JD file types: `.txt`, `.docx`
 
-## 2) Replace Generic Prompt Ingestion With Frontmatter-Driven Loading
-- Update plan steps to use Markdown prompts with YAML frontmatter.
-- Explicitly parse `knowledge_files` from each prompt file.
-- Load only referenced files per prompt for context isolation.
-- Add fail-fast/error behavior for:
-  - missing prompt files
-  - malformed YAML frontmatter
-  - missing referenced knowledge files
+## 2) Define Safe Run Folder Naming Rules
+- Risk: folder name format `YY.MM.DD Company` can fail on Windows with invalid company characters.
+- Decide:
+  - sanitization policy for company name
+  - collision policy for repeated runs on same day
+- Recommended:
+  - allow only `[A-Za-z0-9 _-]`, replace others with `_`
+  - append `-01`, `-02`, ... on collisions
 
-## 3) Make the Pipeline Explicitly Two-Stage With a Go Gate
-- Stage 1 (Sequential): run `00_job_description_analysis.md` only.
-- Display triage result and require explicit user decision to continue.
-- Stage 2 (Parallel): run `01` to `06` concurrently with `asyncio` only when user enters "Go".
-- Add retry/failure handling policy per section (continue vs abort).
+## 3) Replace Free-Text Console Intent Detection With Explicit Commands
+- Risk: "recognize review request" via NLP-style parsing is brittle.
+- Decide:
+  - explicit command grammar for runtime actions
+- Recommended:
+  - accepted commands: `go`, `close`, `review <cv_path>`
+  - unknown input -> help + reprompt
 
-## 4) Define Optional Stage 3: Post-Generation Critique Loop
-- Clarify handling of `07_constructive_criticism.md`:
-  - optional QA step after first draft selection, or
-  - separate command/mode not in default pipeline.
-- If included, define loop behavior:
-  - critique -> user decision -> targeted regenerate.
+## 4) Resolve Frontmatter Consistency for Prompt 07
+- Risk: pipeline says frontmatter-driven loading for prompts, but `07_constructive_criticism.md` has no YAML frontmatter.
+- Decide:
+  - mandatory frontmatter for all prompts vs optional for critique
+- Recommended:
+  - make frontmatter mandatory for all prompts (including `07`) or codify deterministic default behavior
 
-## 5) Add a Strict Response Normalization + Validation Layer
-- Add explicit step before `json.loads()`:
-  - strip markdown code fences
-  - trim stray leading/trailing text
-  - sanitize common malformed JSON patterns
-- Validate universal envelope for every prompt response:
-  - root key: `variations`
-  - each item includes: `id`, `score_0_to_5`, `ai_reasoning`, `content_for_template`
-- Define graceful error behavior:
-  - log malformed payload at `ERROR`
-  - include payload snippet/context
-  - allow section retry without crashing full workflow
+## 5) Finalize Triage Rendering Contract
+- Risk: prompt enforces JSON-only output, while user requires easy-to-read formatted triage in console.
+- Decide:
+  - where formatting is applied
+- Recommended:
+  - keep LLM output JSON-only
+  - render formatted CLI view from parsed `content_for_template`
 
-## 6) Expand Human-in-the-Loop Retrospective Details
-- Add concrete review UX flow:
-  - show section name, variation id, score, reasoning, content
-  - allow choose, edit, retry per section
-- Log user final selection/edit decisions at `INFO`.
-- Persist a final normalized "selected content" map for output assembly.
+## 6) Fix "Verified Sources" Requirement in Triage Prompt
+- Risk: prompt asks for verified sources but no retrieval subsystem is defined.
+- Decide:
+  - add retrieval/browsing stage or remove this requirement
+- Recommended:
+  - for current scope, replace with "state assumptions and confidence level"
 
-## 7) Split Output Strategy: CV Template vs Cover Letter
-- Document that current DOCX template placeholders map only to:
-  - `{{01_professional_summary}}`
-  - `{{02_work_experience_1}}`
-  - `{{03_work_experience_2}}`
-  - `{{04_work_experience_3}}`
-  - `{{05_skills_alignment}}`
-- Add explicit plan rule for `06_cover_letter` output:
-  - export as separate file (`.md`, `.txt`, or separate `.docx`) unless template is extended.
-- State whether `07_constructive_criticism` is persisted and where.
+## 7) Define Missing API Key Behavior (Current Real-World Case)
+- Risk: user may run without Google API config and get unclear runtime failures.
+- Decide:
+  - fail-fast only vs fail-fast + dry-run mode
+- Recommended:
+  - require `GOOGLE_API_KEY` before Stage 1
+  - optional `--dry-run` for non-API validation of parsing/workflow
 
-## 8) Strengthen Observability in the Plan
-- Keep dual logging target (console + local log file).
-- Include concrete log events:
-  - phase/stage start and completion
-  - prompt load + knowledge files used
-  - API request/response metadata
-  - parse/validation failures with stack traces
-  - final output file paths
-- Define log redaction policy for sensitive data/API keys.
+## 8) Standardize Artifact Layout and Filenames
+- Risk: "save readable responses" is defined, but file tree is not deterministic.
+- Decide:
+  - final run folder structure and naming
+- Recommended:
+  - `raw/00.txt`
+  - `normalized/00.json`
+  - `rendered/00.md`
+  - `selected_content.json`
+  - `cv.docx`
+  - `cover_letter.md`
+  - `workflow.log`
 
-## 9) Add Deterministic Testing Phase to the Plan
-- Add a dedicated test phase aligned with project rules:
-  - JSON parser tests with dirty payload fixtures.
-  - DOCX placeholder injection tests using dummy content.
-  - Prompt frontmatter parser tests (`knowledge_files` extraction + failures).
-  - Mapping tests for prompt filename -> output key -> placeholder.
-- Keep explicit "no live LLM quality tests" rule.
+## 9) Protect Privacy by Ignoring Run Artifacts in Git
+- Risk: run outputs contain personal data and may be committed by mistake.
+- Decide:
+  - whether run artifacts are versioned
+- Recommended:
+  - store all run outputs under `runs/`
+  - add `runs/` to root `.gitignore`
+  - keep only safe examples in repo
 
-## 10) Add Final Quality Gate Before Completion
-- Run in this order:
-  - `black .`
-  - `ruff check . --fix`
-  - `pytest`
-- Add completion criteria to plan:
-  - all required stages pass
-  - selected content fully mapped
-  - output files generated without modifying base template
-  - errors are traceable via logs
+## 10) Set Retry and Cost-Control Limits
+- Risk: retry policy exists conceptually but lacks hard caps.
+- Decide:
+  - max retries, timeout, abort thresholds
+- Recommended:
+  - `max_retries_per_section = 2`
+  - `request_timeout_seconds = 60`
+  - abort when failed sections exceed configured threshold
 
-## 11) Suggested `plan.md` Structure Rewrite (High Level)
-- Phase 0: Repo Safety and Scaffolding
-- Phase 1: Configuration and Logging Foundation
-- Phase 2: Prompt and Context Ingestion (Frontmatter)
-- Phase 3: AI Client + Response Normalization/Validation
-- Phase 4: Orchestration (Stage 1 Triage, Stage 2 Parallel Generation)
-- Phase 5: Human-in-the-Loop Retrospective and Selection
-- Phase 6: Output Assembly (CV DOCX + Cover Letter Export)
-- Phase 7: Tests, Lint, Format, Final Verification
+## 11) Lock JSON Validation Strictness Rules
+- Risk: no final policy on coercion vs rejection can cause inconsistent behavior.
+- Decide:
+  - strict reject vs selective coercion
+- Recommended:
+  - strict schema validation by default
+  - allow only minimal coercion (e.g., numeric string to int) with explicit warning logs
 
+## 12) Define Environment Bootstrap Before Quality Gates
+- Risk: formatter/linter/tests currently unavailable in environment.
+- Decide:
+  - dependency/bootstrap workflow (`pip`, `uv`, or `poetry`)
+- Recommended:
+  - document reproducible setup in README
+  - ensure `black`, `ruff`, `pytest` are available in `.venv` before implementation phase
