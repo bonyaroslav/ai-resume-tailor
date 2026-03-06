@@ -220,3 +220,4 @@ prompts/*.md
 # 3. Ignore all local run outputs (which contain personal data)
 runs/
 .env
+.tmp/
