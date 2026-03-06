@@ -18,24 +18,28 @@ Goal: establish privacy, module boundaries, and the core State Machine architect
 * redact personally sensitive fields in logs when feasible
 
 
-4. Define initial module layout for the Graph-Based architecture:
-* `main.py`: CLI entrypoint, argument parsing, and graph initialization.
-* `graph_state.py`: Defines the strictly typed data structure (e.g., Pydantic model) that holds the single persistent session state (JD, triage results, generated drafts, user feedback).
-* `graph_nodes.py`: Contains isolated worker functions (Nodes) that take the State, perform tasks (`node_triage`, `node_generate`, `node_assemble`), and return an updated State.
-* `graph_router.py`: Contains the conditional logic (Edges) that evaluates the State and determines the next node (handles forward progression and backward loops).
-* `prompt_loader.py`: Prompt + YAML frontmatter loading, knowledge file resolution.
-* - llm_client.py: Centralized, provider-agnostic LLM interface. Exposes a single generic async generation function. Google/OpenAI SDK imports must remain strictly isolated inside this file and never leak into the Graph Nodes.
-* `retrospective_ui.py`: The decoupled Human-in-the-Loop (HITL) interface that reads the State, presents choices, and captures feedback.
-* `document_builder.py`: DOCX placeholder mapping and final file export.
+4. Define the minimal module layout for the Graph-Based architecture. Create each file only when its first function is implemented:
+* `main.py`: CLI entrypoint and graph start/resume wiring.
+* `graph_state.py`: Pydantic models for persisted session state and validated AI envelopes.
+* `graph_nodes.py`: Small worker functions (`node_triage`, `node_generate_sections`, `node_review`, `node_assemble`).
+* `graph_router.py`: Explicit `if/elif` routing based on the current `GraphState`.
+* `prompt_loader.py`: Prompt loading, frontmatter parsing, and `inject_context(prompt, context_files)`.
+* `llm_client.py`: Centralized Gemini-only API call function for V1.
+* `document_builder.py`: DOCX placeholder replacement and final export.
+5. Define one canonical `section_id` per generated section. Use that same string across prompt stems, state keys, review keys, saved JSON, output filenames, and DOCX placeholders.
+6. Keep graph changes simple: if a new workflow step is added later, update one explicit router function and one small ordered workflow definition. Do not design a generic DAG engine.
 
 ### Phase 1: Configuration and Logging Foundation
 
 Goal: ensure traceability and secure runtime configuration.
 
-1. 1. Implement environment/config loading: Require an LLM_PROVIDER variable (e.g., 'gemini', 'openai', 'ollama') alongside the respective API credentials to enable seamless engine swapping.
+1. Implement minimal V1 environment/config loading:
+   - require `GEMINI_API_KEY`
+   - optionally allow `GEMINI_MODEL`
+   - do not implement `LLM_PROVIDER` switching in V1
 2. Define CLI input contract for Job Description ingestion:
    - user provides JD as a file path in console
-   - accepted input file types: `.txt` and `.docx`
+   - accepted input file type for V1: `.txt`
    - input may include links and all relevant context inline in the JD file
 3. Implement dual logging sink:
    - console output for live workflow progress
@@ -46,18 +50,23 @@ Goal: ensure traceability and secure runtime configuration.
    - `ERROR`: parse/validation failures with stack traces and payload snippets
 5. Add log redaction policy:
    - never log API keys
+   - do not log full JD text, full knowledge files, or raw LLM payloads by default
    - mask or truncate sensitive user data and long freeform content
 6. Define workflow run-folder convention for all artifacts:
    - create one folder per workflow run
    - folder name format: `YY.MM.DD Company` (example: `26.02.27 Microsoft`)
-   - all generated outputs, logs, and saved responses for that run live in this folder
+   - sanitize unsafe filename characters
+   - all generated outputs and logs for that run live in this folder
+7. Define checkpoint policy:
+   - checkpoint only the normalized `GraphState` required to resume
+   - save raw prompt/response text only when an explicit debug flag is enabled
 
 ### Phase 2: Execution Node 1 (Triage)
 
 Goal: Implement the initial sequential gate to evaluate the job description before spending API credits on generation.
 
 1. Implement `node_triage(state: GraphState) -> GraphState`.
-2. Load and parse `00_job_description_analysis.md`, resolving its specific YAML frontmatter to load required `knowledge/` files.
+2. Load and parse `triage_job_fit_and_risks.md`, resolving its specific YAML frontmatter to load required `knowledge/` files.
 3. Execute the Gemini API call and parse the Go/No-Go JSON response.
 4. **Implement Gate 1 (Forward Edge):** Evaluate the updated State. If the triage result is "No-Go", terminate the graph cleanly. If "Go", route the state forward to Node 2.
 
@@ -67,56 +76,42 @@ Goal: Generate all required CV section variations simultaneously, while supporti
 
 1. Implement `node_generate_sections(state: GraphState) -> GraphState`.
 2. **Context Injection:** Check the `GraphState` for any existing `user_feedback` (this will exist if the graph has looped backward). If feedback exists for a specific section (e.g., "Summary"), dynamically inject it into that specific prompt.
-3. Use `asyncio.gather()` to concurrently execute prompts `01` through `05` (only executing the ones that are currently missing or marked for regeneration).
-4. Parse the returned JSON arrays (variations, scores, AI reasoning) and append them to the `GraphState`.
+3. Use one small ordered list of active generation steps keyed by `section_id`. This list is the only place that defines which prompt-driven sections run in V1.
+4. Use `asyncio.gather()` to concurrently execute only the sections that are currently missing or marked for regeneration.
+5. Parse each returned JSON envelope and store the normalized variations under its matching `section_id`.
+6. Apply a small retry limit for parse/validation failures. Abort cleanly when the limit is exceeded.
 
-### Phase 4: Execution Node 3 (Human-in-the-Loop & The Backward Edge)
+### Phase 4: Review Node (Human-in-the-Loop)
 
-Goal: Pause the system, allow human review, and implement the graph's cyclic routing logic.
+Goal: pause the system, allow human review, and implement the forward/backward routing logic.
 
 1. **Checkpointing:** Before asking for user input, strictly save the `GraphState` to `runs/company/state_checkpoint.json` so the session can be paused/resumed.
-2. Display the UI menu showing the generated variations side-by-side.
-3. **Implement Gate 2 (The Routing Logic):**
-* **Forward Edge (Progression):** If the user selects a specific variation (e.g., "Accept A"), lock it into the `final_selections` of the state. Once all required sections are locked, route forward to the Document Assembly node.
-* **Backward Edge (The Loop):** If the user rejects the variations for a section, capture their text input (e.g., "Make the tone more aggressive"). Update the `GraphState.user_feedback` with this string. Route the state **backward** to Node 2 (`node_generate_sections`) to run another cycle just for that section.
-### Phase 5: Human-in-the-Loop Retrospective and Selection
-
-Goal: provide explicit review UX for safe user-controlled final content.
-
-1. For each section, display:
+2. For each section, display:
    - section name
    - variation id
    - score
    - ai reasoning
    - generated content
-2. Allow user actions per section:
+3. Allow exactly three user actions per section:
    - choose a variation
    - edit selected content
    - retry that section generation
-3. Log final user decisions at `INFO`.
-4. Persist normalized selected content map for downstream output assembly.
-5. Persist every LLM response in readable files inside the run folder:
-   - one file per prompt/stage
-   - include raw text and normalized JSON for review/debugging
+4. **Implement Gate 2 (The Routing Logic):**
+* **Forward Edge (Progression):** If all required sections have a final approved value, route forward to the Document Assembly node.
+* **Backward Edge (The Loop):** If the user retries a section, capture their feedback string, update `GraphState.user_feedback[section_id]`, and route backward to `node_generate_sections` for only that section.
+5. Log final user decisions at `INFO`.
+6. Persist the normalized selected content map for downstream output assembly.
 
-### Phase 6: Output Assembly (CV DOCX and Cover Letter Export)
+### Phase 5: Output Assembly (CV DOCX and Cover Letter Export)
 
 Goal: produce deterministic artifacts while preserving the base template.
 
-1. Map selected content to supported DOCX placeholders:
-   - `{{01_professional_summary}}`
-   - `{{02_work_experience_1}}`
-   - `{{03_work_experience_2}}`
-   - `{{04_work_experience_3}}`
-   - `{{05_skills_alignment}}`
+1. Map selected content to DOCX placeholders using the canonical `section_id` naming rule.
 2. Export CV from template without modifying the original template file.
-3. Handle `06_cover_letter` as separate output file (for example `.md`) unless template placeholders are extended.
-4. Define persistence for critique output (`07_constructive_criticism`) when used:
-   - store as optional QA artifact
-   - do not inject into CV template placeholders
-5. Log final output file paths at `INFO` and keep them inside the run folder.
+3. Handle the cover letter as a separate output file unless the template explicitly includes a matching placeholder.
+4. Log final output file paths at `INFO` and keep them inside the run folder.
 
-### Phase 7: Tests, Lint, Format, Final Verification
+### Phase 6: Tests, Lint, Format, Final Verification
 
 Goal: enforce deterministic quality checks before completion.
 
@@ -124,8 +119,8 @@ Goal: enforce deterministic quality checks before completion.
    - JSON parser tests with dirty payload fixtures
    - DOCX placeholder replacement tests with dummy strings
    - prompt frontmatter parser tests (`knowledge_files` success/failure)
-   - mapping tests (prompt filename -> output key -> placeholder)
-   - Graph Routing tests: Use mock state dictionaries to test that the router correctly triggers the End Node on a 'No-Go' triage, and correctly routes backward when human_feedback is present.
+   - mapping tests (`section_id` -> state key -> placeholder)
+   - Graph routing tests: use mock states to verify `No-Go` termination, review-to-assembly progression, and single-section regeneration routing
 2. Run required quality gate commands in strict order:
    1. `black .`
    2. `ruff check . --fix`

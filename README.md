@@ -13,7 +13,7 @@
   <p>
     <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=for-the-badge&logo=python" alt="Python">
     <img src="https://img.shields.io/badge/Architecture-State_Machine-brightgreen.svg?style=for-the-badge" alt="Architecture">
-    <img src="https://img.shields.io/badge/AI-Provider_Agnostic-orange.svg?style=for-the-badge" alt="LLM">
+    <img src="https://img.shields.io/badge/AI-Gemini_V1-orange.svg?style=for-the-badge" alt="LLM">
     <img src="https://img.shields.io/badge/Privacy-100%25_Local-purple.svg?style=for-the-badge&logo=lock" alt="Privacy">
   </p>
 </div>
@@ -24,23 +24,23 @@
 
 **The Problem:** Over 70% of resumes are automatically rejected by Applicant Tracking Systems (ATS) because they lack the specific semantic vocabulary of the target Job Description. Yet, manually rewriting a CV for every application is a massive time sink, and standard ChatGPT outputs sound generic and hallucinate facts.
 
-**The Solution:** `AI Resume Tailor` is a platform-agnostic, local Python CLI tool. It acts as a **Directed Graph State Machine** that mathematically cross-references your real experience against a target Job Description. It conditionally routes tasks, generates ATS-compliant CV sections concurrently, and pauses for a human-in-the-loop review before assembling a final `.docx`.
+**The Solution:** `AI Resume Tailor` is a local Python CLI tool built as a small **Directed Graph State Machine**. It routes a job description through triage, concurrent section generation, human review, and final `.docx` assembly without relying on heavy agent frameworks.
 
 ---
 
 ## ✨ Key Features
 
 * **🎯 ATS Semantic Alignment:** Rewrites bullet points to match the exact vocabulary and technical phrasing expected by the target company's ATS, without inventing fake experience.
-* **🔄 Graph-Based Agentic Workflow:** Utilizes a cyclic workflow (Fan-out/Fan-in) allowing for infinite "regeneration loops" on specific sections without losing API context.
+* **🔄 Graph-Based Workflow:** Uses an explicit fan-out/fan-in workflow with targeted regeneration for rejected sections.
 * **🛑 Human-in-the-Loop (HITL):** Built-in checkpointing pauses execution, presenting a CLI menu for A/B testing and manual refinement of generated text.
-* **🔌 Provider-Agnostic LLM Layer:** Built with dependency injection. Easily swap between Google Gemini, OpenAI GPT-4, or Anthropic Claude by simply changing an environment variable.
+* **🔌 Minimal LLM Layer:** V1 uses a single centralized Gemini client so API calls remain isolated from workflow logic.
 * **🔒 Zero-Data-Leak Architecture:** Runs 100% locally. Your personal data is isolated via YAML Frontmatter injection and protected by strict `.gitignore` rules.
 
 ---
 
 ## 🧠 System Architecture
 
-Instead of relying on heavy third-party agent frameworks, this core engine is built as a native, lightweight **Directed Graph State Machine**. This ensures high maintainability, strict typing (via Pydantic), and rapid execution.
+Instead of relying on heavy third-party agent frameworks, this core engine is built as a native, lightweight **Directed Graph State Machine** with explicit routing and small functions.
 
 ```mermaid
 graph TD
@@ -68,9 +68,9 @@ graph TD
 
 ### 📐 Architecture Decision Records (ADRs)
 
-1. **Why a Custom State Machine over LangChain?** While LangChain/LangGraph are excellent, they often introduce unnecessary abstraction overhead for strictly scoped CLI tools. By building a native Python state passing mechanism, the execution path remains highly deterministic, deeply understandable, and significantly faster to test.
+1. **Why a Custom State Machine over LangChain?** For a strictly scoped CLI tool, a plain Python state machine is easier to read, easier to test, and harder to over-engineer.
 2. **Context Isolation via Frontmatter:**
-To completely eliminate LLM hallucinations, prompts do not read the entire "knowledge base" blindly. Markdown prompts utilize YAML frontmatter to surgically request *only* the specific text files they need (e.g., `Prompt 3` only requests `Argus_Media_Achievements.md`).
+To completely eliminate LLM hallucinations, prompts do not read the entire "knowledge base" blindly. Markdown prompts utilize YAML frontmatter to surgically request *only* the specific text files they need (e.g., `section_experience_3_latest.md` requests only the files declared in its frontmatter).
 
 
 ---
@@ -79,8 +79,8 @@ To completely eliminate LLM hallucinations, prompts do not read the entire "know
 
 V1 focuses on delivering a deterministic, lightweight State Machine. Once the core pipeline is locked, the following architectural upgrades are planned:
 
-* **Multi-Agent Evaluator (LLM-as-a-Judge):** Introducing a "Critic Node" that acts as a ruthless ATS Recruiter. It will automatically score the generated drafts against the JD *before* presenting them to the human. If a draft scores poorly, the graph will autonomously loop back to the Writer node for a rewrite.
-* **100% Air-Gapped Local Execution:** Adding a `LocalProvider` interface via **Ollama / vLLM**. This will allow the pipeline to run entirely offline using local models (e.g., Llama 3), ensuring absolute data sovereignty without a single byte leaving the user's machine.
+* **Multi-Agent Evaluator (LLM-as-a-Judge):** Add one critic node before human review if V1 proves the core workflow first.
+* **100% Air-Gapped Local Execution:** Add a local provider path via **Ollama / vLLM** after the Gemini-only V1 flow is stable.
 * **Local Semantic RAG:** Transitioning from static YAML Frontmatter to a local Vector Database (e.g., ChromaDB). The system will use Cosine Similarity to dynamically inject only the most mathematically relevant achievements from the user's career history into the AI's context window.
 
 ---
@@ -90,7 +90,7 @@ V1 focuses on delivering a deterministic, lightweight State Machine. Once the co
 ### Prerequisites
 
 * Python 3.10+
-* An API Key (Google Gemini, OpenAI, etc.)
+* A Google Gemini API key
 
 ### Installation
 
@@ -119,7 +119,6 @@ pip install -r requirements.txt
 4. Set your environment variables
 ```env
 # .env
-LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_api_key_here
 
 ```
