@@ -18,12 +18,38 @@ You are a Senior Python Engineer who strictly follows the Zen of Python and the 
 - **Run tests:** `pytest`
 - *Note: Always run the formatter and linter before finalizing a code change.*
 
+### Cross-Platform Command Equivalents
+Use the active shell shown by the environment context. Prefer PowerShell on Windows and bash on Linux/macOS.
+
+- **Create virtual env**
+  - PowerShell: `python -m venv .venv`
+  - bash: `python3 -m venv .venv`
+- **Activate virtual env**
+  - PowerShell: `.venv\Scripts\Activate.ps1`
+  - bash: `source .venv/bin/activate`
+- **Run formatter/linter/tests**
+  - PowerShell: `black .`, `ruff check . --fix`, `pytest`
+  - bash: `black .`, `ruff check . --fix`, `pytest`
+- **Set env var for one session**
+  - PowerShell: `$env:GEMINI_API_KEY="..."`
+  - bash: `export GEMINI_API_KEY="..."`
+
 ## 📐 Coding Conventions & Architecture
 - **Type Hinting:** You MUST use strict Python type hints for all function arguments and return types (e.g., `def parse_json(data: str) -> dict:`).
 - **Separation of Concerns:** Keep functions short and single-purpose. Separate the codebase into logical modules (e.g., `main.py`, `llm_client.py`, `document_builder.py`, `retrospective_ui.py`).
 - **Defensive Parsing:** Always wrap `json.loads()` from AI responses in a `try/except` block. Assume the AI will occasionally return malformed markdown (e.g., ```json...```) and actively strip it before parsing.
 - **Logging:** Use Python's built-in `logging` module. Log major workflow steps (INFO), metadata useful for debugging (DEBUG), and stack traces/parsing failures (ERROR) to both the console and a local `.log` file. Do NOT log full job descriptions, full knowledge files, API keys, or raw LLM payloads by default.
 - **Pydantic Scope:** Use Pydantic only at the boundaries where structure matters: persisted `GraphState` and validated AI response envelopes. Keep workflow logic as plain functions operating on simple values.
+
+### Logging Redaction Rules (Examples)
+- Never log secrets: API keys, bearer tokens, auth headers, `.env` values.
+- Never log full user content: full JD text, full knowledge markdown, full resume text, raw LLM request/response bodies.
+- Redact direct identifiers by default: email addresses, phone numbers, street addresses, profile URLs.
+- Prefer metadata logs:
+  - Good: `Loaded JD file (chars=8421, sha256=abc123...)`
+  - Bad: `Loaded JD: <full job description text>`
+  - Good: `LLM response parse failed for section_id=exp_2`
+  - Bad: `Raw LLM response: {...full payload...}`
 
 ## Strict Coding Rules:
 1. **No Premature Abstraction:** NEVER create Base Classes, Interfaces (ABCs), or generic wrappers unless I explicitly instruct you to. 
@@ -72,3 +98,42 @@ When making asynchronous calls to the Gemini API, the Python code must expect th
 - Store user run artifacts only under `runs/`.
 - Keep `runs/` and real `knowledge/` content out of version control.
 - Checkpoints must contain resumable normalized state, not every raw response body.
+
+## Checkpoint State Contract
+Persist only normalized state required to resume execution. Every checkpoint JSON must include:
+
+- `state_version` (string, e.g., `"1.0"`)
+- `run_id` (string)
+- `status` (string enum: `running|awaiting_review|completed|failed`)
+- `current_node` (string)
+- `section_states` (object keyed by canonical `section_id`)
+- `review_queue` (array of `section_id`)
+- `updated_at` (ISO 8601 UTC timestamp)
+
+Rules:
+- Keep one canonical `section_id` across prompts, state, review, and DOCX placeholders.
+- Store derived metadata and selected variation only; omit raw prompt/response dumps unless explicit debug mode is enabled.
+- On schema changes, bump `state_version` and provide a small migration function.
+
+## Commit/PR Message Format
+Use this template for commits and PR descriptions:
+
+```text
+problem: <what was broken or missing>
+change: <what was implemented>
+risk: <behavioral risk, regression surface, or "low">
+test evidence: <black/ruff/pytest results or reason skipped>
+```
+
+Guidelines:
+- Keep each field to 1-3 short lines.
+- Reference touched modules and user-visible behavior.
+- If tests are skipped, state why explicitly.
+
+## Anti-Patterns (Do Not Introduce)
+- Generic "manager", "engine", or "orchestrator" classes when a function or small module is enough.
+- Base classes / ABC hierarchies without a present concrete need.
+- Broad `utils.py` dumping grounds with mixed unrelated helpers.
+- Silent `except Exception:` blocks that hide failures.
+- Infinite retry or autonomous rewrite loops.
+- Compatibility shims for providers not implemented in V1.

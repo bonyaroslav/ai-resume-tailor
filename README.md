@@ -61,7 +61,7 @@ graph TD
     J -. Backward Edge .-> E
     
     I -->|User Approves All| K(Node 4: Assembly)
-    K --> L[Inject {{Placeholders}}]
+    K --> L["Inject {{Placeholders}}"]
     L --> M[Export CV.docx]
 
 ```
