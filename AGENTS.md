@@ -96,7 +96,7 @@ When making asynchronous calls to the Gemini API, the Python code must expect th
 
 ## Runtime Privacy Rules
 - Store user run artifacts only under `runs/`.
-- Keep `runs/` and real `knowledge/` content out of version control.
+- Version-control policy for `knowledge/` and `prompts/` is defined in `.gitignore` under `AI Resume Tailor Privacy Guardrails` (single source of truth, including explicit allowlisted `knowledge/*.md` exceptions).
 - Checkpoints must contain resumable normalized state, not every raw response body.
 
 ## Checkpoint State Contract
