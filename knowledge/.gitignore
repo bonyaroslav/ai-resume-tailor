@@ -1,0 +1,8 @@
+# Ignore all personal markdown files in the knowledge folder
+profile_technical_skills_matrix.md
+accomplishments_work_*.md
+accomplishments_work_*.md
+accomplishments_work_*.md
+
+# EXCEPT for example/template files
+!*.example.md
