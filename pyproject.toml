@@ -1,0 +1,12 @@
+[tool.black]
+extend-exclude = '''
+(
+  ^/\.pytest_tmp
+  | ^/pytest-cache-files-.*
+  | ^/tests/_tmp_pytest_run_.*
+  | ^/tests/\.tmp
+)
+'''
+
+[tool.ruff]
+exclude = [".pytest_tmp", "pytest-cache-files-*", "tests/_tmp_pytest_run_*", "tests/.tmp"]

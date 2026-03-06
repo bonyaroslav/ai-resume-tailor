@@ -1,45 +1,155 @@
-# AI Resume Tailor (Platform-Agnostic CV Pipeline)
+# Requirements (V1 Baseline)
 
-## 📌 Project Overview
-A local, platform-agnostic Python automation tool that transforms a generic CV into a highly targeted application package. It utilizes a two-stage asynchronous pipeline via the Google Gemini API: first analyzing the job for risks/fit (Triage), and then generating tailored CV sections in parallel. It ensures high quality via a Human-in-the-Loop CLI retrospective and assembles the final `.docx` locally.
+## Runtime
 
-## 🏗️ Core Features & Workflow
+- Python `3.10+` (tested on `3.13`)
+- Local `.venv`
+- Gemini API key via `GEMINI_API_KEY`
 
-### 1. Data Privacy & Reusability
-* **Agnostic Architecture:** The repository must contain NO personal data. 
-* **Knowledge Directory:** All personal receipts, skills, and cover letter facts live in a local `knowledge/` directory, which is strictly excluded via `.gitignore`. 
-* **Templates:** The repository provides empty `knowledge/*.example.md` files for new users to clone and populate with their own data.
+## Dependencies
 
-### 2. Context Isolation (YAML Frontmatter)
-* Prompts are stored as Markdown files in the `prompts/` directory.
-* To prevent AI hallucinations, prompts do NOT load all user data at once. Instead, they use YAML Frontmatter at the top of the file to explicitly declare which specific `knowledge/` files they need.
-* *Example:* `section_experience_2_previous.md` will only load the knowledge files declared in its frontmatter.
+- `google-genai`
+- `python-docx`
+- `rich`
+- `pydantic`
+- `PyYAML`
+- `pytest`
+- `black`
+- `ruff`
 
-### 3. Two-Stage Execution Pipeline
-* **Stage 1: Triage (Sequential):** The system runs `triage_job_fit_and_risks.md`, cross-referencing the JD against skill gaps and employment risks. It prints a concise Go/No-Go recommendation to the CLI and asks the user for permission to proceed.
-* **Stage 2: Document Generation (Parallel):** If the user inputs "Go", the system uses `asyncio` to execute the active section prompts concurrently to generate CV sections and the cover letter.
+## Locked workflow contract
 
-### 4. Structured Output & Retrospective (Human-in-the-Loop)
-* **Universal JSON Envelope:** The AI is strictly prompted to return responses in a universal JSON schema: `{"variations": [{"id": "A", "score_0_to_5": 5, "ai_reasoning": "...", "content_for_template": "..."}]}`.
-* **Interactive Review:** The system displays the variations, scores, and AI reasoning in the CLI. The user selects the best variation for each section to prevent hallucinations from making it into the final document.
+Canonical ordered workflow IDs:
 
-### 5. Document Assembly
-* The system reads a base `Default Template.docx`.
-* It utilizes a 1-to-1 mapping strategy: each generated section uses one canonical `section_id`, and that same identifier maps directly to the placeholder in the Word document.
-* The populated document is saved securely to the local machine without modifying the original template.
+1. `triage_job_fit_and_risks`
+2. `section_professional_summary`
+3. `section_skills_alignment`
+4. `section_experience_1`
+5. `section_experience_2`
+6. `section_experience_3`
+7. `doc_cover_letter`
 
----
+Rules:
 
-## ⚙️ Technical Requirements & Stack
+- Experience names normalize with `^section_experience_(\d+)(?:_.+)?$` to `section_experience_<n>`.
+- Cover letter is required in review/output but is not a CV template placeholder requirement.
+- Prompt files outside the locked workflow are ignored.
+- Duplicate normalized prompt IDs fail fast.
 
-* **OS/Environment:** Platform-agnostic (Python 3.10+). Local execution only.
-* **AI Provider:** `google-genai` library utilizing Gemini (Flash/Pro).
-* **Concurrency:** Python native `asyncio` for non-blocking API requests.
-* **Document Manipulation:** `python-docx` for parsing and generating the final Word document.
-* **Data Parsing:** `PyYAML` to parse prompt frontmatter; native `json` with robust error handling for API responses.
-* **CLI Interface:** `rich` or standard `print`/`input` for the interactive Retrospective menu.
+## GraphState and checkpoint contract
 
-## 📐 Development Rules (Lightweight TDD)
-* **Do not write tests for LLM quality.** Focus testing strictly on deterministic logic.
-* Write tests for the JSON parsing layer (ensuring it can strip markdown and handle bad JSON).
-* Write tests for the `python-docx` injection layer (ensuring it finds and replaces `{{Placeholders}}` correctly using dummy strings).
+Persisted checkpoint JSON must include:
+
+- `state_version` (`"1.0"`)
+- `run_id`
+- `status` (`running|awaiting_review|completed|failed`)
+- `current_node`
+- `section_states`
+- `review_queue`
+- `updated_at` (ISO-8601 UTC)
+
+Per-section normalized shape:
+
+- `status`
+- `variations`
+- `selected_variation_id`
+- `selected_content`
+- `user_note`
+- `retry_count`
+
+Rules:
+
+- Only normalized resumable state is checkpointed.
+- Checkpoint writes are atomic (temp + rename).
+- Corrupt JSON or unsupported `state_version` must fail clearly.
+
+## Prompt/frontmatter contract
+
+- Prompt format: markdown with optional YAML frontmatter.
+- Supported frontmatter keys: only `knowledge_files`.
+- `knowledge_files` must be a list of filenames under `knowledge/`.
+- Invalid YAML, unsupported keys, and missing files fail fast.
+- `inject_context(prompt, context_files)` is the isolated context injection boundary.
+
+## LLM response contract
+
+Universal response envelope for every prompt:
+
+```json
+{
+  "variations": [
+    {
+      "id": "A",
+      "score_0_to_5": 5,
+      "ai_reasoning": "Reasoning string here",
+      "content_for_template": "The actual text to inject into the output"
+    }
+  ]
+}
+```
+
+Parsing behavior:
+
+- Cleanup before parse: whitespace trim, markdown fence removal, optional leading `json` label removal.
+- `json.loads()` is wrapped with explicit parse error handling.
+- Envelope schema is validated via Pydantic.
+- Parse/schema failures are logged separately.
+- Automatic parse retry is capped to one retry per request.
+
+## Review and retry contract
+
+Per-section actions:
+
+- choose variation
+- edit selected content
+- retry with note
+
+Global action:
+
+- `save_and_exit` (checkpoint and exit cleanly)
+
+Rules:
+
+- Section is approved only when `selected_content` is final.
+- User-triggered retries are capped to two per section.
+- Retry note is appended back into the same original section prompt.
+
+## Template validation and outputs
+
+- Template preflight runs before generation and at assembly.
+- Required CV placeholders:
+  - `section_professional_summary`
+  - `section_skills_alignment`
+  - `section_experience_1`
+  - `section_experience_2`
+  - `section_experience_3`
+- Experience placeholders use the same normalization rule as prompt IDs.
+- Duplicate normalized template placeholders fail fast.
+- Outputs are written under run folder:
+  - `tailored_cv.docx`
+  - `cover_letter.txt`
+
+## CLI contract
+
+Only two entry commands:
+
+- `run --jd-path <path.txt> --company <name>`
+- `resume --run-path <run_dir>` or `resume --checkpoint-path <checkpoint.json>`
+
+`run` supports `.txt` JD input only.
+
+## Privacy and logging
+
+- Artifacts stay under `runs/`.
+- Raw prompt/response dumps are stored only with explicit debug mode.
+- Logs include metadata (sizes/hash) and redact common identifiers and secrets.
+- Full JD/knowledge/raw payload logging is avoided by default.
+
+## Deterministic test scope
+
+- JSON cleanup and envelope validation
+- Prompt frontmatter parsing and knowledge file validation failures
+- Section-ID mapping and canonical normalization
+- Router transitions (triage stop, review retry, review to assembly)
+- DOCX placeholder preflight and replacement
+- No live LLM API tests
