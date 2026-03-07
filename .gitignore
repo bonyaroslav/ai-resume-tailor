@@ -234,3 +234,6 @@ pytest-cache-files-*/
 tests/_tmp_pytest_run_*/
 tmp/
 temp/
+.venv/
+.pytest_tmp/
+pytest_cache-files*/
