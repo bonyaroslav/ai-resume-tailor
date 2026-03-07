@@ -214,6 +214,50 @@ def _print_section_variations(section_id: str, section_state: SectionState) -> N
         print("-" * 40)
 
 
+def _print_review_header(
+    section_id: str, position: int, total: int, retry_count: int
+) -> None:
+    print("")
+    print(f"[Review {position}/{total}] {section_id}")
+    print(f"Retries used: {retry_count}/{MAX_USER_RETRIES_PER_SECTION}")
+
+
+def _normalize_action(raw_action: str) -> str:
+    aliases = {
+        "c": "choose",
+        "e": "edit",
+        "r": "retry",
+        "s": "save_and_exit",
+    }
+    action = raw_action.strip().lower()
+    return aliases.get(action, action)
+
+
+def _prompt_for_action() -> str:
+    valid_actions = "choose/edit/retry/save_and_exit"
+    while True:
+        action = _normalize_action(input(f"Action [{valid_actions}] (c/e/r/s): "))
+        if action in {"choose", "edit", "retry", "save_and_exit"}:
+            return action
+        print("Invalid action. Use choose/edit/retry/save_and_exit (or c/e/r/s).")
+
+
+def _prompt_for_variation_id(
+    section_state: SectionState, *, prompt_text: str, default_id: str | None = None
+) -> Variation:
+    valid_ids = [variation.id for variation in section_state.variations]
+    print(f"Valid variation IDs: {', '.join(valid_ids)}")
+    while True:
+        chosen_id = input(prompt_text).strip()
+        if not chosen_id and default_id is not None:
+            chosen_id = default_id
+
+        chosen = _find_variation(section_state.variations, chosen_id)
+        if chosen:
+            return chosen
+        print("Invalid variation id. Try again.")
+
+
 def _approve_variation(
     section_state: SectionState, variation: Variation, edited_content: str | None = None
 ) -> None:
@@ -223,6 +267,8 @@ def _approve_variation(
         edited_content if edited_content is not None else variation.content_for_template
     )
     section_state.user_note = None
+    if not section_state.selected_content:
+        raise ValueError("Approved section content cannot be empty.")
 
 
 def _handle_retry(section_state: SectionState) -> None:
@@ -242,48 +288,54 @@ def _handle_retry(section_state: SectionState) -> None:
     section_state.selected_content = None
 
 
-def _review_single_section(section_id: str, section_state: SectionState) -> bool:
+def _review_single_section(
+    section_id: str, section_state: SectionState, position: int, total: int
+) -> bool:
+    _print_review_header(section_id, position, total, section_state.retry_count)
     _print_section_variations(section_id, section_state)
+
     while True:
-        action = input("Action [choose/edit/retry/save_and_exit]: ").strip().lower()
+        action = _prompt_for_action()
         if action == "save_and_exit":
+            print("Saving current progress and exiting review.")
             return True
 
         if action == "choose":
-            chosen_id = input("Variation id: ").strip()
-            chosen = _find_variation(section_state.variations, chosen_id)
-            if not chosen:
-                print("Invalid variation id.")
-                continue
+            chosen = _prompt_for_variation_id(
+                section_state, prompt_text="Variation id: "
+            )
             _approve_variation(section_state, chosen)
+            print(f"Approved variation '{chosen.id}'.")
             return False
 
         if action == "edit":
             default_id = (
                 section_state.selected_variation_id or section_state.variations[0].id
             )
-            chosen_id = (
-                input(f"Variation id to edit [{default_id}]: ").strip() or default_id
+            chosen = _prompt_for_variation_id(
+                section_state,
+                prompt_text=f"Variation id to edit [{default_id}]: ",
+                default_id=default_id,
             )
-            chosen = _find_variation(section_state.variations, chosen_id)
-            if not chosen:
-                print("Invalid variation id.")
-                continue
-            edited_content = input("Final edited content: ").strip()
-            if not edited_content:
+            while True:
+                edited_content = input("Final edited content: ").strip()
+                if edited_content:
+                    break
                 print("Edited content cannot be empty.")
-                continue
-            _approve_variation(section_state, chosen, edited_content=edited_content)
+            _approve_variation(section_state, chosen, edited_content)
+            print(f"Approved edited content for variation '{chosen.id}'.")
             return False
 
         if action == "retry":
             before = section_state.status
             _handle_retry(section_state)
             if section_state.status != before:
+                print(
+                    "Retry requested. "
+                    f"Retry count is now {section_state.retry_count}/{MAX_USER_RETRIES_PER_SECTION}."
+                )
                 return False
             continue
-
-        print("Unknown action.")
 
 
 def node_review(
@@ -296,7 +348,8 @@ def node_review(
         if state.section_states[section_id].status == "generated"
     ]
 
-    for section_id in queue:
+    total = len(queue)
+    for index, section_id in enumerate(queue, start=1):
         section_state = state.section_states[section_id]
         if section_state.status != "generated":
             continue
@@ -304,12 +357,13 @@ def node_review(
             continue
 
         save_checkpoint(context.checkpoint_path, state)
-        should_exit = _review_single_section(section_id, section_state)
+        should_exit = _review_single_section(section_id, section_state, index, total)
         if should_exit:
             state.current_node = "review"
             state.status = "awaiting_review"
             state.review_queue = queue
             touch_state(state)
+            print(f"Checkpoint ready at: {context.checkpoint_path}")
             return state, True
         logger.info(
             "Review decision captured for section_id=%s, status=%s",

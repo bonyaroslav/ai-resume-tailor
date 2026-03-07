@@ -32,6 +32,12 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 12. Added targeted integration coverage with mocked LLM responses:
     - end-to-end graph run (`triage -> generate -> review -> assemble`)
     - deterministic review selection path without live API calls
+13. Improved review UX without changing action contract:
+    - per-section progress/retry header
+    - action aliases (`c/e/r/s`) and explicit invalid-action re-prompt
+    - variation ID validation with re-prompt and valid-ID hint
+    - safer edit/retry feedback and save-and-exit checkpoint feedback
+    - deterministic review UX tests with mocked input paths
 
 ## Current module map
 
@@ -53,36 +59,5 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 
 When starting the next implementation phase, keep focus on production hardening only:
 
-1. Improve review UX without changing the review action contract.
-2. Add state migration utility when `state_version` changes from `1.0`.
-3. Add optional richer diagnostics around failure categories without logging raw sensitive content.
-
-## Review UX subtasks (next)
-
-1. Add a per-section review header in `graph_nodes.py` showing:
-   - `section_id`
-   - progress index/total
-   - current `retry_count` and max retry limit
-2. Strengthen action parsing for `choose/edit/retry/save_and_exit`:
-   - support short aliases (`c/e/r/s`)
-   - re-prompt with explicit valid options on invalid input
-3. Improve variation selection validation:
-   - show valid variation IDs before prompt
-   - re-prompt when ID is missing/unknown
-4. Improve `edit` flow safety:
-   - keep default variation ID behavior
-   - reject empty edited content with clear retry prompt
-   - confirm final content was captured before marking approved
-5. Add concise decision feedback after each section action:
-   - approved variation ID
-   - retry requested with updated retry count
-   - save-and-exit checkpoint intent
-6. Add deterministic tests for review UX behavior with mocked `input()`:
-   - invalid action then valid action
-   - alias actions path
-   - invalid variation ID then valid ID
-   - retry limit reached path
-7. Run required quality gates and record evidence:
-   - `black .`
-   - `ruff check . --fix`
-   - `pytest`
+1. Add state migration utility when `state_version` changes from `1.0`.
+2. Add optional richer diagnostics around failure categories without logging raw sensitive content.
