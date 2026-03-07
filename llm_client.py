@@ -1,11 +1,60 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+from pathlib import Path
 from typing import Any
+
+OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
+OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
+DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
 
 
 class LlmClientError(RuntimeError):
     pass
+
+
+def _is_truthy_env(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _offline_mode_enabled() -> bool:
+    return _is_truthy_env(os.getenv(OFFLINE_MODE_ENV))
+
+
+def _load_offline_fixtures() -> dict[str, dict[str, Any]]:
+    configured = os.getenv(OFFLINE_FIXTURES_PATH_ENV, "").strip()
+    path = Path(configured) if configured else DEFAULT_OFFLINE_FIXTURES_PATH
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise LlmClientError(f"Offline fixture file not found: {path}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise LlmClientError(f"Offline fixture file is invalid JSON: {path}") from exc
+
+    if not isinstance(data, dict):
+        raise LlmClientError(
+            "Offline fixture JSON must be an object keyed by section_id."
+        )
+    return data
+
+
+def _generate_offline(section_id: str | None) -> str:
+    if not section_id:
+        raise LlmClientError("Offline mode requires a section_id for fixture lookup.")
+    fixtures = _load_offline_fixtures()
+    payload = fixtures.get(section_id)
+    if payload is None:
+        raise LlmClientError(
+            f"Missing offline fixture payload for section_id '{section_id}'."
+        )
+    return json.dumps(payload)
 
 
 def _extract_text(response: Any) -> str:
@@ -46,5 +95,9 @@ def _generate_sync(prompt: str, api_key: str, model: str) -> str:
     return text
 
 
-async def generate_with_gemini(prompt: str, api_key: str, model: str) -> str:
+async def generate_with_gemini(
+    prompt: str, api_key: str, model: str, section_id: str | None = None
+) -> str:
+    if _offline_mode_enabled():
+        return _generate_offline(section_id)
     return await asyncio.to_thread(_generate_sync, prompt, api_key, model)

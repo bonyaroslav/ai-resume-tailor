@@ -1,7 +1,7 @@
 ---
 knowledge_files:
   - "profile_technical_skills_matrix.md"
-  - "accomplishments_company_3_latest.md"
+  - "accomplishments_work_3_argusmedia.md"
 ---
 # Role: Expert Technical Resume Writer
 

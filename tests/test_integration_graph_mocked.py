@@ -55,6 +55,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         model_name="fake-model",
         prompt_templates=_build_prompt_templates(run_dir),
         debug_mode=False,
+        auto_approve_review=False,
     )
 
 
@@ -102,11 +103,13 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     context = _build_runtime_context(run_dir, template_path)
     state: GraphState = create_initial_state("integration-run-1")
 
-    async def fake_generate_with_gemini(prompt: str, api_key: str, model: str) -> str:
+    async def fake_generate_with_gemini(
+        prompt: str, api_key: str, model: str, section_id: str | None = None
+    ) -> str:
         assert api_key == "test-key"
         assert model == "fake-model"
-        section_id = _extract_section_id_from_prompt(prompt)
-        return _fake_response_for_section(section_id)
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        return _fake_response_for_section(resolved_section_id)
 
     review_inputs = []
     for _ in GENERATION_SECTION_IDS:

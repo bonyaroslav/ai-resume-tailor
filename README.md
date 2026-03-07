@@ -158,6 +158,35 @@ python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 
 ```
 
+### Offline Smoke Run (No Network)
+
+Use deterministic local fixtures to validate end-to-end behavior (logs, checkpoint, DOCX output):
+
+```powershell
+$env:ART_OFFLINE_MODE="1"
+$env:ART_AUTO_APPROVE_REVIEW="1"
+python main.py run --jd-path .\inputs\job_description.txt --company "Offline Smoke"
+```
+
+Default offline fixture file:
+
+- `knowledge/offline_responses.example.json`
+
+Optional custom fixture path:
+
+```powershell
+$env:ART_OFFLINE_FIXTURES_PATH="C:\path\to\fixtures.json"
+```
+
+### Real Gemini Run (Google AI Studio)
+
+```powershell
+$env:GEMINI_API_KEY="your_api_key_here"
+Remove-Item Env:ART_OFFLINE_MODE -ErrorAction SilentlyContinue
+Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
+python main.py run --jd-path .\inputs\job_description.txt --company "Stripe"
+```
+
 **2. Resume a Paused Review Session (from JSON Checkpoint):**
 
 ```sh

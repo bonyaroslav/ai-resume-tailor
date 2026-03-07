@@ -17,6 +17,8 @@ Two execution profiles are allowed:
    - Uses deterministic local fixtures.
    - Must preserve the same universal envelope schema as real mode.
    - Must not require network access.
+   - Toggle via `ART_OFFLINE_MODE=1`.
+   - Fixture path override via `ART_OFFLINE_FIXTURES_PATH=<path>`.
 
 ## Dependencies
 
@@ -154,6 +156,7 @@ Only two entry commands:
 Offline support rules:
 
 - Offline run behavior must be explicitly enabled (toggle/flag/env).
+- Optional offline auto-review shortcut via `ART_AUTO_APPROVE_REVIEW=1`.
 - Default behavior remains interactive HITL and real Gemini mode.
 
 ## Privacy and logging

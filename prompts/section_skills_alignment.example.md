@@ -1,9 +1,9 @@
 ---
 knowledge_files:
  - "profile_technical_skills_matrix.md"
- - "accomplishments_company_3_latest.md"
- - "accomplishments_company_2_previous.md"
- - "accomplishments_company_1_oldest.md"  
+ - "accomplishments_work_3_argusmedia.md"
+ - "accomplishments_work_2_justeat_2019-2021.md"
+ - "accomplishments_work_1_justeat_2016-2019.md"  
 ---
 # Role: Expert Technical Resume Writer
 

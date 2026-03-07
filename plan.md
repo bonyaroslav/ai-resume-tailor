@@ -38,6 +38,15 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
     - variation ID validation with re-prompt and valid-ID hint
     - safer edit/retry feedback and save-and-exit checkpoint feedback
     - deterministic review UX tests with mocked input paths
+14. Added MVP offline execution support and fixed prompt/knowledge alignment:
+    - moved default template under `knowledge/` and updated default CLI path
+    - added offline LLM emulation mode via deterministic fixture envelopes
+    - added offline auto-approve review mode for unattended smoke runs
+    - added CLI-level offline E2E test validating logs/checkpoint/docx/txt outputs
+    - fixed prompt example frontmatter references to existing `knowledge/` files
+15. Executed offline CLI smoke run (non-test) and validated generated run artifacts:
+    - `run.log`, `state_checkpoint.json`, `tailored_cv.docx`, `cover_letter.txt`
+    - status reached `completed` in runtime logs
 
 ## Current module map
 
@@ -98,3 +107,10 @@ When starting the next implementation phase, keep focus on MVP execution readine
 2. If the fix is small and local, implement it in the same cycle.
 3. If the fix is broad, defer it with a one-line rationale and continue MVP path.
 4. Do not add abstractions or new architecture unless a real blocker requires it.
+
+## Gaps Found
+
+1. impact: blocker
+   affected module: `prompts/*.example.md`
+   smallest viable fix: align `knowledge_files` entries to existing `knowledge/accomplishments_work_*.md` files
+   status: fixed

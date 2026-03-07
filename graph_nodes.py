@@ -40,6 +40,7 @@ class RuntimeContext:
     model_name: str
     prompt_templates: dict[str, PromptTemplate]
     debug_mode: bool
+    auto_approve_review: bool
 
 
 def _find_variation(variations: list[Variation], variation_id: str) -> Variation | None:
@@ -71,7 +72,7 @@ async def _generate_section_variations(
     last_error: Exception | None = None
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
         raw_response = await generate_with_gemini(
-            prompt, context.api_key, context.model_name
+            prompt, context.api_key, context.model_name, section_id
         )
         if context.debug_mode:
             _write_debug_response(context.run_dir, section_id, attempt, raw_response)
@@ -382,6 +383,20 @@ def node_review(
     ]
 
     total = len(queue)
+    if context.auto_approve_review:
+        for section_id in queue:
+            section_state = state.section_states[section_id]
+            if section_state.status != "generated":
+                continue
+            if not section_state.variations:
+                continue
+            _approve_variation(section_state, section_state.variations[0])
+            logger.info(
+                "Auto-approved section_id=%s with variation_id=%s",
+                section_id,
+                section_state.selected_variation_id,
+            )
+
     for index, section_id in enumerate(queue, start=1):
         section_state = state.section_states[section_id]
         if section_state.status != "generated":

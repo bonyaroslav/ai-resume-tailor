@@ -22,8 +22,10 @@ from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
 from workflow_definition import TEMPLATE_SECTION_IDS
 
-DEFAULT_TEMPLATE_PATH = "Default Template - Senior Software Engineer.docx"
+DEFAULT_TEMPLATE_PATH = "knowledge/Default Template - Senior Software Engineer.docx"
 DEFAULT_MODEL = "gemini-2.5-flash"
+AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
+OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -49,10 +51,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_api_key() -> str:
+    if _is_truthy_env(os.getenv(OFFLINE_MODE_ENV)):
+        return "offline-mode"
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("Missing GEMINI_API_KEY environment variable.")
     return api_key
+
+
+def _is_truthy_env(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _read_job_description(jd_path: Path) -> str:
@@ -185,6 +195,7 @@ def _prepare_runtime_context(
         model_name=model_name,
         prompt_templates=prompt_templates,
         debug_mode=debug_mode,
+        auto_approve_review=_is_truthy_env(os.getenv(AUTO_APPROVE_REVIEW_ENV)),
     )
 
 
