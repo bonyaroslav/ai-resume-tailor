@@ -14,6 +14,7 @@ from document_builder import (
 from graph_state import GraphState, SectionState, Variation, touch_state
 from json_parser import ResponseParseError, ResponseSchemaError, parse_response_envelope
 from llm_client import generate_with_gemini
+from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
 from workflow_definition import (
     COVER_LETTER_SECTION_ID,
@@ -77,28 +78,52 @@ async def _generate_section_variations(
         try:
             envelope = parse_response_envelope(raw_response)
         except ResponseParseError as exc:
-            logger.error(
-                "JSON parse failure for section_id=%s (attempt=%s)",
-                section_id,
-                attempt + 1,
+            log_failure(
+                logger,
+                category="parse_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
             )
             last_error = exc
             continue
         except ResponseSchemaError as exc:
-            logger.error(
-                "Envelope schema mismatch for section_id=%s (attempt=%s)",
-                section_id,
-                attempt + 1,
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
             )
             last_error = exc
             continue
 
         if not envelope.variations:
             last_error = ResponseSchemaError("Envelope contains no variations.")
-            logger.error("Envelope has empty variations for section_id=%s", section_id)
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail="Envelope contains no variations.",
+            )
             continue
         return envelope.variations
 
+    log_failure(
+        logger,
+        category="generation_error",
+        node="generate_sections",
+        section_id=section_id,
+        retry_count=section_state.retry_count,
+        detail="LLM response failed parsing after allowed retries.",
+    )
     raise RuntimeError(
         f"LLM response failed parsing for section '{section_id}'."
     ) from last_error
@@ -183,6 +208,14 @@ async def node_generate_sections(
     for index, result in enumerate(results):
         section_id = targets[index]
         if isinstance(result, Exception):
+            log_failure(
+                logger,
+                category="generation_error",
+                node="generate_sections",
+                section_id=section_id,
+                retry_count=state.section_states[section_id].retry_count,
+                detail=str(result),
+            )
             raise RuntimeError(
                 f"Generation failed for section '{section_id}'."
             ) from result
@@ -411,6 +444,14 @@ def node_assemble(
     for section_id in TEMPLATE_SECTION_IDS:
         content = state.section_states[section_id].selected_content
         if not content:
+            log_failure(
+                logger,
+                category="assemble_error",
+                node="assemble",
+                section_id=section_id,
+                retry_count=state.section_states[section_id].retry_count,
+                detail="Missing approved content for section.",
+            )
             raise ValueError(f"Missing approved content for section '{section_id}'.")
         selected_cv_content[section_id] = content
 
@@ -424,6 +465,14 @@ def node_assemble(
         COVER_LETTER_SECTION_ID
     ].selected_content
     if not cover_letter_content:
+        log_failure(
+            logger,
+            category="assemble_error",
+            node="assemble",
+            section_id=COVER_LETTER_SECTION_ID,
+            retry_count=state.section_states[COVER_LETTER_SECTION_ID].retry_count,
+            detail="Missing approved content for doc_cover_letter.",
+        )
         raise ValueError("Missing approved content for doc_cover_letter.")
     write_cover_letter(context.output_cover_letter_path, cover_letter_content)
 

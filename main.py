@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from graph_nodes import (
 )
 from graph_router import route_next_node
 from graph_state import GraphState, create_initial_state, touch_state
-from logging_utils import configure_logging, sha256_short
+from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
 from workflow_definition import TEMPLATE_SECTION_IDS
@@ -62,6 +63,25 @@ def _read_job_description(jd_path: Path) -> str:
     return jd_path.read_text(encoding="utf-8")
 
 
+def _save_checkpoint_or_raise(
+    *,
+    checkpoint_path: Path,
+    state: GraphState,
+    logger: logging.Logger,
+    node: str,
+) -> None:
+    try:
+        save_checkpoint(checkpoint_path, state)
+    except Exception as exc:
+        log_failure(
+            logger,
+            category="checkpoint_error",
+            node=node,
+            detail=str(exc),
+        )
+        raise
+
+
 async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
     logger = configure_logging(context.run_dir, context.debug_mode)
     logger.info("Run started. run_id=%s, model=%s", state.run_id, context.model_name)
@@ -76,7 +96,12 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
         if next_node == "end":
             break
 
-        save_checkpoint(context.checkpoint_path, state)
+        _save_checkpoint_or_raise(
+            checkpoint_path=context.checkpoint_path,
+            state=state,
+            logger=logger,
+            node=next_node,
+        )
         try:
             if next_node == "triage":
                 state = await node_triage(state, context, logger)
@@ -88,7 +113,12 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
 
             if next_node == "review":
                 state, should_exit = node_review(state, context, logger)
-                save_checkpoint(context.checkpoint_path, state)
+                _save_checkpoint_or_raise(
+                    checkpoint_path=context.checkpoint_path,
+                    state=state,
+                    logger=logger,
+                    node=next_node,
+                )
                 if should_exit:
                     logger.info("State saved. Exiting on user save_and_exit action.")
                     return state
@@ -103,11 +133,27 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
             state.status = "failed"
             state.current_node = next_node
             touch_state(state)
-            save_checkpoint(context.checkpoint_path, state)
+            log_failure(
+                logger,
+                category="workflow_error",
+                node=next_node,
+                detail="Workflow node execution failed.",
+            )
+            _save_checkpoint_or_raise(
+                checkpoint_path=context.checkpoint_path,
+                state=state,
+                logger=logger,
+                node=next_node,
+            )
             logger.exception("Workflow failed at node '%s'.", next_node)
             raise
 
-    save_checkpoint(context.checkpoint_path, state)
+    _save_checkpoint_or_raise(
+        checkpoint_path=context.checkpoint_path,
+        state=state,
+        logger=logger,
+        node=state.current_node,
+    )
     logger.info("Run finished with status=%s.", state.status)
     return state
 

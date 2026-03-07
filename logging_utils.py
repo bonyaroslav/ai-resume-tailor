@@ -53,3 +53,33 @@ def configure_logging(run_dir: Path, debug_mode: bool) -> logging.Logger:
 
 def sha256_short(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _sanitize_detail(detail: str) -> str:
+    normalized = " ".join(detail.split()).strip()
+    if not normalized:
+        return "-"
+    if len(normalized) <= 240:
+        return normalized
+    return normalized[:237] + "..."
+
+
+def log_failure(
+    logger: logging.Logger,
+    *,
+    category: str,
+    node: str,
+    section_id: str | None = None,
+    attempt: int | None = None,
+    retry_count: int | None = None,
+    detail: str = "",
+) -> None:
+    logger.error(
+        "failure category=%s node=%s section_id=%s attempt=%s retry_count=%s detail=%s",
+        category,
+        node,
+        section_id or "-",
+        attempt if attempt is not None else "-",
+        retry_count if retry_count is not None else "-",
+        _sanitize_detail(detail),
+    )
