@@ -29,6 +29,9 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
     - `black .`
     - `ruff check . --fix`
     - `pytest`
+12. Added targeted integration coverage with mocked LLM responses:
+    - end-to-end graph run (`triage -> generate -> review -> assemble`)
+    - deterministic review selection path without live API calls
 
 ## Current module map
 
@@ -51,6 +54,5 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 When starting the next implementation phase, keep focus on production hardening only:
 
 1. Improve review UX without changing the review action contract.
-2. Add targeted integration tests with mocked LLM client (still no live API in tests).
-3. Add state migration utility when `state_version` changes from `1.0`.
-4. Add optional richer diagnostics around failure categories without logging raw sensitive content.
+2. Add state migration utility when `state_version` changes from `1.0`.
+3. Add optional richer diagnostics around failure categories without logging raw sensitive content.
