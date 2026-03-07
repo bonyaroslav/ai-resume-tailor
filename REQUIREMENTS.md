@@ -6,6 +6,18 @@
 - Local `.venv`
 - Gemini API key via `GEMINI_API_KEY`
 
+## Execution profiles
+
+Two execution profiles are allowed:
+
+1. Real Gemini mode
+   - Uses Google AI Studio API key via `GEMINI_API_KEY`.
+   - Calls Gemini through `google-genai`.
+2. Offline emulation mode
+   - Uses deterministic local fixtures.
+   - Must preserve the same universal envelope schema as real mode.
+   - Must not require network access.
+
 ## Dependencies
 
 - `google-genai`
@@ -117,6 +129,7 @@ Rules:
 ## Template validation and outputs
 
 - Template preflight runs before generation and at assembly.
+- Default template path is expected under `knowledge/` for local consistency.
 - Required CV placeholders:
   - `section_professional_summary`
   - `section_skills_alignment`
@@ -138,6 +151,11 @@ Only two entry commands:
 
 `run` supports `.txt` JD input only.
 
+Offline support rules:
+
+- Offline run behavior must be explicitly enabled (toggle/flag/env).
+- Default behavior remains interactive HITL and real Gemini mode.
+
 ## Privacy and logging
 
 - Artifacts stay under `runs/`.
@@ -152,4 +170,5 @@ Only two entry commands:
 - Section-ID mapping and canonical normalization
 - Router transitions (triage stop, review retry, review to assembly)
 - DOCX placeholder preflight and replacement
+- Offline end-to-end workflow test with deterministic local fixtures
 - No live LLM API tests

@@ -57,7 +57,44 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 
 ## Next plan.md execution scope
 
-When starting the next implementation phase, keep focus on production hardening only:
+When starting the next implementation phase, keep focus on MVP execution readiness:
 
-1. Add state migration utility when `state_version` changes from `1.0`.
-2. Add optional richer diagnostics around failure categories without logging raw sensitive content.
+1. Move default template into `knowledge/` and update default CLI path.
+2. Add an offline emulation run mode for deterministic end-to-end execution.
+3. Add a non-interactive review mode for offline smoke runs only.
+4. Add one offline E2E test that validates run logs, checkpoint, CV DOCX, and cover letter outputs.
+5. Run one real Gemini smoke run and capture concise run notes for prompt tuning.
+
+## Actionable subtasks
+
+1. Template path alignment
+   - Move `Default Template - Senior Software Engineer.docx` to `knowledge/`.
+   - Update `DEFAULT_TEMPLATE_PATH` and README examples.
+   - Verify `run` works without `--template-path`.
+2. Offline emulation mode
+   - Add one explicit toggle (env var or CLI flag) to bypass network Gemini calls.
+   - Load deterministic section responses from a local fixture file.
+   - Keep the same universal envelope schema as production.
+3. Offline review shortcut
+   - Add one explicit toggle to auto-choose variation `A` for every section.
+   - Keep current HITL behavior as default.
+4. Offline E2E validation
+   - Execute full graph offline against real prompts/knowledge files.
+   - Assert output artifacts exist and placeholders are replaced.
+   - Assert logs/checkpoint show `completed` status.
+5. Real Gemini smoke run
+   - Run a single real JD through AI Studio key flow.
+   - Record only metadata findings (no raw sensitive content).
+6. Quality gate and plan update
+   - Run `black .`, `ruff check . --fix`, `pytest`.
+   - Mark completed items and unresolved blockers in this plan.
+
+## Gap handling policy (flexible by design)
+
+1. If a blocker appears, add it under a `Gaps Found` section with:
+   - impact (`blocker|high|medium|low`)
+   - affected module
+   - smallest viable fix
+2. If the fix is small and local, implement it in the same cycle.
+3. If the fix is broad, defer it with a one-line rationale and continue MVP path.
+4. Do not add abstractions or new architecture unless a real blocker requires it.
