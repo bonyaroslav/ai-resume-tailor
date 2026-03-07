@@ -56,3 +56,33 @@ When starting the next implementation phase, keep focus on production hardening 
 1. Improve review UX without changing the review action contract.
 2. Add state migration utility when `state_version` changes from `1.0`.
 3. Add optional richer diagnostics around failure categories without logging raw sensitive content.
+
+## Review UX subtasks (next)
+
+1. Add a per-section review header in `graph_nodes.py` showing:
+   - `section_id`
+   - progress index/total
+   - current `retry_count` and max retry limit
+2. Strengthen action parsing for `choose/edit/retry/save_and_exit`:
+   - support short aliases (`c/e/r/s`)
+   - re-prompt with explicit valid options on invalid input
+3. Improve variation selection validation:
+   - show valid variation IDs before prompt
+   - re-prompt when ID is missing/unknown
+4. Improve `edit` flow safety:
+   - keep default variation ID behavior
+   - reject empty edited content with clear retry prompt
+   - confirm final content was captured before marking approved
+5. Add concise decision feedback after each section action:
+   - approved variation ID
+   - retry requested with updated retry count
+   - save-and-exit checkpoint intent
+6. Add deterministic tests for review UX behavior with mocked `input()`:
+   - invalid action then valid action
+   - alias actions path
+   - invalid variation ID then valid ID
+   - retry limit reached path
+7. Run required quality gates and record evidence:
+   - `black .`
+   - `ruff check . --fix`
+   - `pytest`
