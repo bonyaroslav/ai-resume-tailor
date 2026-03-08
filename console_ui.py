@@ -13,6 +13,7 @@ _CONSOLE = Console(safe_box=True)
 UI_ENABLED_ENV = "ART_UI_ENABLED"
 SHOW_PROMPTS_ENV = "ART_UI_SHOW_PROMPTS"
 SHOW_RESPONSES_ENV = "ART_UI_SHOW_RESPONSES"
+MAX_KNOWLEDGE_PREVIEW_LINES = 3
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,65 @@ def _safe_console_text(value: str) -> str:
     return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
 
 
+def _truncate_lines(text: str, max_lines: int) -> str:
+    lines = text.splitlines()
+    if len(lines) <= max_lines:
+        return text
+    head = "\n".join(lines[:max_lines])
+    omitted = len(lines) - max_lines
+    suffix = f"\n... ({omitted} more line{'s' if omitted != 1 else ''})"
+    return f"{head}{suffix}"
+
+
+def _prompt_for_display(prompt: str) -> str:
+    lines = prompt.splitlines()
+    if "## Context Files" not in lines:
+        return prompt
+
+    output: list[str] = []
+    in_context = False
+    current_header: str | None = None
+    current_content: list[str] = []
+
+    def _flush_current() -> None:
+        if current_header is None:
+            return
+        output.append(current_header)
+        output.append(
+            _truncate_lines("\n".join(current_content), MAX_KNOWLEDGE_PREVIEW_LINES)
+        )
+
+    for line in lines:
+        if line == "## Context Files":
+            in_context = True
+            output.append(line)
+            continue
+        if not in_context:
+            output.append(line)
+            continue
+        if line.startswith("## Runtime Input"):
+            _flush_current()
+            current_header = None
+            current_content = []
+            in_context = False
+            output.append(line)
+            continue
+        if line.startswith("### "):
+            _flush_current()
+            current_header = line
+            current_content = []
+            continue
+        if current_header is None:
+            output.append(line)
+            continue
+        current_content.append(line)
+
+    if in_context:
+        _flush_current()
+
+    return "\n".join(output)
+
+
 def render_prompt(section_id: str, prompt: str) -> None:
     if not _enabled(UI_ENABLED_ENV, default=True):
         return
@@ -71,9 +131,10 @@ def render_prompt(section_id: str, prompt: str) -> None:
         return
 
     styles = _styles()
+    display_prompt = _prompt_for_display(prompt)
     _CONSOLE.print(
         Panel(
-            Text(_safe_console_text(prompt), style=styles.prompt_body),
+            Text(_safe_console_text(display_prompt), style=styles.prompt_body),
             title=_safe_console_text(f"Prompt: {section_id}"),
             title_align="left",
             border_style=styles.prompt_border,

@@ -30,6 +30,8 @@ MAX_AUTOMATIC_PARSE_RETRIES = 1
 MAX_USER_RETRIES_PER_SECTION = 2
 LLM_HEARTBEAT_INTERVAL_SECONDS = 15
 LLM_HEARTBEAT_INTERVAL_ENV = "ART_LLM_HEARTBEAT_SECONDS"
+REVIEW_STEP_DELIMITER = "=" * 72
+REVIEW_SUB_DELIMITER = "-" * 72
 
 
 @dataclass(frozen=True)
@@ -288,21 +290,24 @@ async def node_generate_sections(
 
 
 def _print_section_variations(section_id: str, section_state: SectionState) -> None:
-    print("")
-    print(f"== {section_id} ==")
+    print(REVIEW_SUB_DELIMITER)
+    print(f"Section Variations: {section_id}")
+    print(REVIEW_SUB_DELIMITER)
     for variation in section_state.variations:
         print(f"[{variation.id}] score={variation.score_0_to_5}")
         print(f"reason: {variation.ai_reasoning}")
         print(variation.content_for_template)
-        print("-" * 40)
+        print(REVIEW_SUB_DELIMITER)
 
 
 def _print_review_header(
     section_id: str, position: int, total: int, retry_count: int
 ) -> None:
     print("")
+    print(REVIEW_STEP_DELIMITER)
     print(f"[Review {position}/{total}] {section_id}")
     print(f"Retries used: {retry_count}/{MAX_USER_RETRIES_PER_SECTION}")
+    print(REVIEW_STEP_DELIMITER)
 
 
 def _normalize_action(raw_action: str) -> str:
