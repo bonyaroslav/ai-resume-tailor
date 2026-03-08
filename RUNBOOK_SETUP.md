@@ -43,6 +43,8 @@ $env:ART_AUTO_APPROVE_REVIEW="1"
 .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Offline Smoke"
 ```
 
+`--jd-path` supports `.txt` and `.docx`.
+
 Expected artifacts under `runs/<run_id>/`:
 
 - `run.log`

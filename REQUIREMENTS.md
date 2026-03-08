@@ -148,10 +148,10 @@ Rules:
 
 Only two entry commands:
 
-- `run --jd-path <path.txt> --company <name>`
+- `run --jd-path <path.txt|path.docx> --company <name>`
 - `resume --run-path <run_dir>` or `resume --checkpoint-path <checkpoint.json>`
 
-`run` supports `.txt` JD input only.
+`run` supports `.txt` and `.docx` JD input.
 
 Offline support rules:
 

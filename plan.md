@@ -47,6 +47,9 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 15. Executed offline CLI smoke run (non-test) and validated generated run artifacts:
     - `run.log`, `state_checkpoint.json`, `tailored_cv.docx`, `cover_letter.txt`
     - status reached `completed` in runtime logs
+16. Added extension-based JD ingestion for `.txt` and `.docx`:
+    - extracted `.docx` paragraph and table content for runtime input
+    - added deterministic tests for supported and unsupported extensions
 
 ## Current module map
 

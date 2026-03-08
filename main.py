@@ -17,6 +17,7 @@ from graph_nodes import (
 )
 from graph_router import route_next_node
 from graph_state import GraphState, create_initial_state, touch_state
+from job_description_loader import read_job_description
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
@@ -63,14 +64,6 @@ def _is_truthy_env(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _read_job_description(jd_path: Path) -> str:
-    if not jd_path.exists():
-        raise FileNotFoundError(f"JD file not found: {jd_path}")
-    if jd_path.suffix.lower() != ".txt":
-        raise ValueError("V1 only supports .txt Job Description input files.")
-    return jd_path.read_text(encoding="utf-8")
 
 
 def _save_checkpoint_or_raise(
@@ -201,7 +194,7 @@ def _prepare_runtime_context(
 
 async def _handle_run(args: argparse.Namespace) -> None:
     run_dir = create_run_directory(Path("runs"), args.company)
-    jd_text = _read_job_description(args.jd_path)
+    jd_text = read_job_description(args.jd_path)
     (run_dir / "job_description.txt").write_text(jd_text, encoding="utf-8")
 
     model_name = args.model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)

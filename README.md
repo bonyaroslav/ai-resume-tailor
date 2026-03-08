@@ -160,6 +160,8 @@ python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 
 ```
 
+`--jd-path` accepts `.txt` or `.docx`.
+
 ### Offline Smoke Run (No Network)
 
 Use deterministic local fixtures to validate end-to-end behavior (logs, checkpoint, DOCX output):
