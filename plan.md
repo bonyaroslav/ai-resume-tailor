@@ -6,6 +6,14 @@ This plan is now aligned to the implemented V1 baseline and TODO decisions.
 
 Goal: minimize human interaction to one triage decision, complete generation automatically, then support targeted regeneration/rebuild at any later time for the same company run.
 
+### Architecture Rule (Locked)
+
+Use exactly one persisted workflow state source:
+
+1. Canonical persisted state: `state_checkpoint.json` only.
+2. No second persisted decision state/file as workflow input.
+3. Any summary/report must be derived from checkpoint + logs and treated as disposable output.
+
 ### Product Behavior Targets
 
 1. Human gate only at triage
@@ -47,9 +55,10 @@ Goal: minimize human interaction to one triage decision, complete generation aut
      - inject user comment into prompt (`retry_note`)
      - rebuild outputs
    - Ensure completed runs remain re-openable without creating new run folder.
-6. Decision summary artifact
-   - Add `decision_summary.json` (or `.md`) under run folder.
-   - Record triage decision, selected variation per section, score table, regenerate events.
+6. Derived status/report view (non-authoritative)
+   - Add a status view/command that reads checkpoint and logs.
+   - Print triage decision, selected variation IDs/scores, pending/retry sections.
+   - Optional export is allowed, but must be regenerated and never read by workflow logic.
 7. Validation and docs
    - Update tests for schema migration and auto review flow.
    - Update README/RUNBOOK usage with triage-first + auto-run + regenerate-later path.
@@ -63,6 +72,8 @@ Goal: minimize human interaction to one triage decision, complete generation aut
    - Mitigation: deterministic runtime tie-break + warning log.
 3. Risk: reduced human quality control
    - Mitigation: strong audit logs + easy regenerate/rebuild loop.
+4. Risk: dual source of truth drift
+   - Mitigation: keep checkpoint as the only persisted workflow authority.
 
 ## Completed
 
