@@ -20,7 +20,6 @@ from graph_router import route_next_node
 from graph_state import GraphState, create_initial_state, touch_state
 from job_description_loader import read_job_description
 from logging_utils import configure_logging, log_failure, sha256_short
-from llm_client import QuotaExceededError
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
 from workflow_definition import (
@@ -138,36 +137,6 @@ def _print_next_steps(state: GraphState, run_dir: Path) -> None:
         print("3. Exit.")
         return
     print("1. Exit.")
-
-
-def _print_quota_guidance(
-    *, quota_error: QuotaExceededError, run_dir: Path, during_command: str
-) -> None:
-    info = quota_error.info
-    section_label = info.section_id or "unknown_section"
-    print("")
-    print("=" * 72)
-    print("Gemini API quota limit reached. Progress was saved safely.")
-    print(
-        f"Failed section: {section_label} | status_code={info.status_code if info.status_code is not None else '-'}"
-    )
-    print(f"Quota scope: {info.quota_scope}")
-    if info.retry_delay_seconds is not None:
-        print(f"Suggested retry delay: {int(info.retry_delay_seconds)} seconds")
-    print(f"API response detail: {info.detail}")
-    if info.quota_metric:
-        print(f"Quota metric: {info.quota_metric}")
-    if info.quota_value:
-        print(f"Quota limit value: {info.quota_value}")
-    print("Next steps:")
-    print(f"1. Resume later: python main.py resume --run-path {run_dir}")
-    print("2. Reduce speed (sequential mode + higher pacing interval).")
-    print("3. Upgrade quota/billing in AI Studio if needed.")
-    print("=" * 72)
-    if during_command == "run":
-        print("Run command stopped gracefully due to quota exhaustion.")
-    else:
-        print("Resume command stopped gracefully due to quota exhaustion.")
 
 
 def _prompt_action(prompt_text: str, allowed: dict[str, str]) -> str:
@@ -413,7 +382,7 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
                 continue
 
             raise ValueError(f"Unhandled node '{next_node}'")
-        except Exception as exc:
+        except Exception:
             state.status = "failed"
             state.current_node = next_node
             touch_state(state)
@@ -429,12 +398,6 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
                 logger=logger,
                 node=next_node,
             )
-            if isinstance(exc, QuotaExceededError):
-                logger.error(
-                    "Workflow paused at node '%s' due to Gemini quota exhaustion.",
-                    next_node,
-                )
-                raise
             logger.exception("Workflow failed at node '%s'.", next_node)
             raise
 
@@ -529,11 +492,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
     print(f"Using run folder: {run_dir}")
     print(f"Model: {model_name}")
     print(f"JD preview: {_job_description_preview(jd_text, max_lines=3)}")
-    try:
-        final_state = await _run_graph(state, context)
-    except QuotaExceededError as exc:
-        _print_quota_guidance(quota_error=exc, run_dir=run_dir, during_command="run")
-        return
+    final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
     _print_next_steps(final_state, run_dir)
 
@@ -561,11 +520,7 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         model_name=model_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
-    try:
-        final_state = await _run_graph(state, context)
-    except QuotaExceededError as exc:
-        _print_quota_guidance(quota_error=exc, run_dir=run_dir, during_command="resume")
-        return
+    final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
     _print_next_steps(final_state, run_dir)
 
