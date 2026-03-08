@@ -117,3 +117,74 @@ When starting the next implementation phase, keep focus on MVP execution readine
    affected module: `prompts/*.example.md`
    smallest viable fix: align `knowledge_files` entries to existing `knowledge/accomplishments_work_*.md` files
    status: fixed
+
+## Next Phase: Resume-First UX And Run Reuse
+
+Goal: make human interaction explicit, resumable, and actionable without forcing users to restart or guess next commands.
+
+### Decisions Required Before Implementation
+
+1. Folder naming + reuse policy
+   - Option A: one stable folder per company slug (example: `runs/mindera`)
+   - Option B: dated folder naming, but always reuse the latest matching run for that company
+2. Behavior when `run` finds an existing completed run
+   - Option A: show summary and prompt user: `resume / view outputs / start fresh`
+   - Option B: do nothing unless an explicit `--force-new` flag is passed
+3. Control surface for post-run operations
+   - Option A: add explicit commands (`status`, `regenerate`, `rebuild-output`)
+   - Option B: keep existing commands and print instructions only
+4. History policy inside reused run folders
+   - Option A: single current checkpoint/state only
+   - Option B: keep lightweight snapshots/backups per major transition
+
+### Step-By-Step Implementation Plan
+
+1. Run discovery and state summary
+   - On `run`, detect existing run folder for the selected company.
+   - If found, load checkpoint and print concise stage status:
+     - triage
+     - generation
+     - review
+     - assembly
+     - current node + overall status
+2. Human guidance at every interaction point
+   - Add concise "What you can do next" output for:
+     - triage stop
+     - awaiting review
+     - retry requested
+     - failed state
+     - completed state
+   - Include exact next command examples.
+3. Remove forced incremental run folder suffixing
+   - Replace incremented naming behavior with run reuse behavior per chosen decision.
+   - Keep ability to create a separate run by using a unique company name/suffix.
+4. Resume current JD flow by default
+   - Make resume path first-class when existing state is detected.
+   - Avoid overwriting progress silently.
+5. Post-run operation support
+   - Implement selected approach:
+     - explicit subcommands (`status`, `regenerate`, `rebuild-output`), or
+     - instruction-only guidance with current command surface.
+6. Regeneration and output guidance
+   - Ensure user is told:
+     - how to regenerate specific section(s)
+     - how to rebuild/reprint cover letter and CV outputs
+     - how to continue from checkpoint.
+7. Tests and docs
+   - Add/adjust tests for:
+     - existing run detection and summary rendering
+     - run reuse behavior (no auto increment)
+     - guidance output coverage per major state
+   - Update `README.md` and `RUNBOOK_SETUP.md` with the final UX flow.
+8. Quality gate
+   - Run `black .`
+   - Run `ruff check . --fix`
+   - Run `pytest`
+
+### Acceptance Criteria
+
+1. User always sees clear next-step instructions at every human-interaction checkpoint.
+2. Existing run folders are detected and state is summarized before actions proceed.
+3. Users can continue current JD processing without manually hunting for run/checkpoint paths.
+4. Auto-increment folder strategy is removed in favor of explicit reuse policy.
+5. Documentation matches implemented CLI behavior.

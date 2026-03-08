@@ -508,6 +508,15 @@ def node_review(
     state: GraphState, context: RuntimeContext, logger: logging.Logger
 ) -> tuple[GraphState, bool]:
     logger.info("Node review started.")
+    print("")
+    print(REVIEW_STEP_DELIMITER)
+    print("Review step started.")
+    print("For each section, choose one action:")
+    print("- choose: approve variation A/B/etc.")
+    print("- edit: select a variation and provide final text")
+    print("- retry: request regeneration with guidance note")
+    print("- save_and_exit: save progress and continue later")
+    print(REVIEW_STEP_DELIMITER)
     queue = state.review_queue or [
         section_id
         for section_id in GENERATION_SECTION_IDS

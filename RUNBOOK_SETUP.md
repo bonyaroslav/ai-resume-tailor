@@ -93,10 +93,13 @@ Google AI Studio controls account access, quotas, and billing, but model choice 
 ## 7. Resume a paused run
 
 ```powershell
-.\.venv\Scripts\python.exe main.py resume --run-path .\runs\<run_id>
+.\.venv\Scripts\python.exe main.py resume --run-path .\runs\<company-slug>
 # or
-.\.venv\Scripts\python.exe main.py resume --checkpoint-path .\runs\<run_id>\state_checkpoint.json
+.\.venv\Scripts\python.exe main.py resume --checkpoint-path .\runs\<company-slug>\state_checkpoint.json
 ```
+
+Run folders are reused by company slug (example: `runs\mindera`).
+If you want a separate run, use a unique company value, for example `"Mindera-v2"`.
 
 ## 8. Troubleshooting quick checks
 
