@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from time import monotonic
 from pathlib import Path
 
 from checkpoint import save_checkpoint
@@ -25,6 +26,7 @@ from workflow_definition import (
 
 MAX_AUTOMATIC_PARSE_RETRIES = 1
 MAX_USER_RETRIES_PER_SECTION = 2
+LLM_HEARTBEAT_INTERVAL_SECONDS = 15
 
 
 @dataclass(frozen=True)
@@ -71,8 +73,37 @@ async def _generate_section_variations(
 
     last_error: Exception | None = None
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
-        raw_response = await generate_with_gemini(
-            prompt, context.api_key, context.model_name, section_id
+        logger.info(
+            "LLM request started section_id=%s attempt=%s",
+            section_id,
+            attempt + 1,
+        )
+        request_started = monotonic()
+        request_task = asyncio.create_task(
+            generate_with_gemini(
+                prompt, context.api_key, context.model_name, section_id
+            )
+        )
+        while True:
+            try:
+                raw_response = await asyncio.wait_for(
+                    asyncio.shield(request_task),
+                    timeout=LLM_HEARTBEAT_INTERVAL_SECONDS,
+                )
+                break
+            except asyncio.TimeoutError:
+                elapsed_s = int(monotonic() - request_started)
+                logger.info(
+                    "LLM request in progress section_id=%s attempt=%s elapsed_s=%s",
+                    section_id,
+                    attempt + 1,
+                    elapsed_s,
+                )
+        logger.info(
+            "LLM request completed section_id=%s attempt=%s duration_ms=%s",
+            section_id,
+            attempt + 1,
+            int((monotonic() - request_started) * 1000),
         )
         if context.debug_mode:
             _write_debug_response(context.run_dir, section_id, attempt, raw_response)

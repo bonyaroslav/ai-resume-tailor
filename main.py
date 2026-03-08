@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from time import monotonic
 
 from checkpoint import CheckpointError, load_checkpoint, save_checkpoint
 from document_builder import TemplateValidationError, preflight_template
@@ -105,13 +106,26 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
             logger=logger,
             node=next_node,
         )
+        node_started = monotonic()
         try:
             if next_node == "triage":
                 state = await node_triage(state, context, logger)
+                logger.info(
+                    "Node triage completed duration_ms=%s status=%s current_node=%s",
+                    int((monotonic() - node_started) * 1000),
+                    state.status,
+                    state.current_node,
+                )
                 continue
 
             if next_node == "generate_sections":
                 state = await node_generate_sections(state, context, logger)
+                logger.info(
+                    "Node generate_sections completed duration_ms=%s status=%s current_node=%s",
+                    int((monotonic() - node_started) * 1000),
+                    state.status,
+                    state.current_node,
+                )
                 continue
 
             if next_node == "review":
@@ -122,6 +136,13 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
                     logger=logger,
                     node=next_node,
                 )
+                logger.info(
+                    "Node review completed duration_ms=%s status=%s current_node=%s should_exit=%s",
+                    int((monotonic() - node_started) * 1000),
+                    state.status,
+                    state.current_node,
+                    should_exit,
+                )
                 if should_exit:
                     logger.info("State saved. Exiting on user save_and_exit action.")
                     return state
@@ -129,6 +150,12 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
 
             if next_node == "assemble":
                 state = node_assemble(state, context, logger)
+                logger.info(
+                    "Node assemble completed duration_ms=%s status=%s current_node=%s",
+                    int((monotonic() - node_started) * 1000),
+                    state.status,
+                    state.current_node,
+                )
                 continue
 
             raise ValueError(f"Unhandled node '{next_node}'")
