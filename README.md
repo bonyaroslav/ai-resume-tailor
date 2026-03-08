@@ -109,6 +109,8 @@ python main.py resume --checkpoint-path ./runs/26.03.06-stripe/state_checkpoint.
 
 ## 🚀 Getting Started
 
+<p><b>New here?</b> Use the concise setup guide: <a href="./RUNBOOK_SETUP.md">RUNBOOK_SETUP.md</a></p>
+
 ### Prerequisites
 
 * Python 3.10+
