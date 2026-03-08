@@ -8,6 +8,7 @@ import pytest
 from llm_client import (
     DEFAULT_MAX_429_ATTEMPTS,
     LlmClientError,
+    QuotaExceededError,
     _generate_with_fallback,
     _response_config,
     _response_json_schema,
@@ -77,6 +78,37 @@ def _quota_error(*, retry_delay_seconds: int) -> FakeClientError:
                         "@type": "type.googleapis.com/google.rpc.RetryInfo",
                         "retryDelay": f"{retry_delay_seconds}s",
                     }
+                ],
+            }
+        },
+    )
+
+
+def _daily_quota_error(*, retry_delay_seconds: int) -> FakeClientError:
+    return FakeClientError(
+        "request failed",
+        {
+            "error": {
+                "code": 429,
+                "message": (
+                    "Quota exceeded. " f"Please retry in {retry_delay_seconds}.0s."
+                ),
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [
+                            {
+                                "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                                "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                                "quotaValue": "20",
+                            }
+                        ],
+                    },
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": f"{retry_delay_seconds}s",
+                    },
                 ],
             }
         },
@@ -184,9 +216,29 @@ def test_generate_with_fallback_raises_after_max_429_attempts(
     monkeypatch.setenv("ART_LLM_BACKOFF_BASE_SECONDS", "0.1")
     monkeypatch.setattr("llm_client.time.sleep", lambda seconds: waits.append(seconds))
 
-    with pytest.raises(LlmClientError) as exc_info:
+    with pytest.raises(QuotaExceededError) as exc_info:
         _generate_with_fallback(client, prompt="prompt", model="gemini-test")
 
-    assert "Gemini request failed" in str(exc_info.value)
+    assert exc_info.value.info.quota_scope == "unknown"
     assert len(models.calls) == DEFAULT_MAX_429_ATTEMPTS
     assert waits == [1.0, 1.0, 1.0, 1.0]
+
+
+def test_generate_with_fallback_daily_quota_fails_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models = FakeModels([_daily_quota_error(retry_delay_seconds=30)])
+    client = SimpleNamespace(models=models)
+    waits: list[float] = []
+
+    monkeypatch.setenv("ART_LLM_MAX_429_ATTEMPTS", "5")
+    monkeypatch.setenv("ART_LLM_BACKOFF_BASE_SECONDS", "0.1")
+    monkeypatch.setattr("llm_client.time.sleep", lambda seconds: waits.append(seconds))
+
+    with pytest.raises(QuotaExceededError) as exc_info:
+        _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+
+    assert exc_info.value.info.quota_scope == "daily"
+    assert exc_info.value.info.quota_id is not None
+    assert len(models.calls) == 1
+    assert waits == []

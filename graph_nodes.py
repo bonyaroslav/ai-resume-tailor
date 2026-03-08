@@ -16,7 +16,7 @@ from document_builder import (
 )
 from graph_state import GraphState, SectionState, Variation, touch_state
 from json_parser import ResponseParseError, ResponseSchemaError, parse_response_envelope
-from llm_client import generate_with_gemini
+from llm_client import QuotaExceededError, generate_with_gemini
 from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
 from workflow_definition import (
@@ -177,6 +177,8 @@ async def _generate_section_variations(
                     attempt + 1,
                     elapsed_s,
                 )
+            except QuotaExceededError as exc:
+                raise exc.with_section_id(section_id) from exc
         logger.info(
             "LLM request completed section_id=%s attempt=%s duration_ms=%s",
             section_id,
@@ -338,6 +340,8 @@ async def node_generate_sections(
     for index, result in enumerate(results):
         section_id = targets[index]
         if isinstance(result, Exception):
+            if isinstance(result, QuotaExceededError):
+                raise result.with_section_id(section_id) from result
             log_failure(
                 logger,
                 category="generation_error",
@@ -508,6 +512,15 @@ def node_review(
     state: GraphState, context: RuntimeContext, logger: logging.Logger
 ) -> tuple[GraphState, bool]:
     logger.info("Node review started.")
+    print("")
+    print(REVIEW_STEP_DELIMITER)
+    print("Review step started.")
+    print("For each section, choose one action:")
+    print("- choose: approve variation A/B/etc.")
+    print("- edit: select a variation and provide final text")
+    print("- retry: request regeneration with guidance note")
+    print("- save_and_exit: save progress and continue later")
+    print(REVIEW_STEP_DELIMITER)
     queue = state.review_queue or [
         section_id
         for section_id in GENERATION_SECTION_IDS

@@ -10,8 +10,8 @@ def test_create_run_directory_appends_incremental_suffix() -> None:
 
     first = create_run_directory(runs_dir, "Acme Corp")
     second = create_run_directory(runs_dir, "Acme Corp")
-    third = create_run_directory(runs_dir, "Acme Corp")
+    other = create_run_directory(runs_dir, "Acme Corp V2")
 
-    assert first.name.endswith("-1")
-    assert second.name.endswith("-2")
-    assert third.name.endswith("-3")
+    assert first == second
+    assert first.name == "acme-corp"
+    assert other.name == "acme-corp-v2"

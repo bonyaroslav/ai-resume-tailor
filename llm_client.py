@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,12 +15,51 @@ OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
 DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
 LLM_MAX_429_ATTEMPTS_ENV = "ART_LLM_MAX_429_ATTEMPTS"
 LLM_BACKOFF_BASE_SECONDS_ENV = "ART_LLM_BACKOFF_BASE_SECONDS"
+LLM_MAX_TOTAL_WAIT_SECONDS_ENV = "ART_LLM_MAX_TOTAL_WAIT_SECONDS"
 DEFAULT_MAX_429_ATTEMPTS = 5
 DEFAULT_BACKOFF_BASE_SECONDS = 2.0
+DEFAULT_MAX_TOTAL_WAIT_SECONDS = 300.0
 
 
 class LlmClientError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class QuotaErrorInfo:
+    status_code: int | None
+    detail: str
+    retry_delay_seconds: float | None
+    quota_id: str | None
+    quota_metric: str | None
+    quota_value: str | None
+    quota_scope: str
+    section_id: str | None = None
+
+
+class QuotaExceededError(LlmClientError):
+    def __init__(self, info: QuotaErrorInfo) -> None:
+        super().__init__(info.detail)
+        self.info = info
+
+    @property
+    def section_id(self) -> str | None:
+        return self.info.section_id
+
+    def with_section_id(self, section_id: str) -> QuotaExceededError:
+        if self.info.section_id:
+            return self
+        updated = QuotaErrorInfo(
+            status_code=self.info.status_code,
+            detail=self.info.detail,
+            retry_delay_seconds=self.info.retry_delay_seconds,
+            quota_id=self.info.quota_id,
+            quota_metric=self.info.quota_metric,
+            quota_value=self.info.quota_value,
+            quota_scope=self.info.quota_scope,
+            section_id=section_id,
+        )
+        return QuotaExceededError(updated)
 
 
 def _is_truthy_env(value: str | None) -> bool:
@@ -220,6 +260,54 @@ def _is_retryable_quota_error(exc: Exception) -> bool:
     return "resource_exhausted" in detail or "quota exceeded" in detail
 
 
+def _quota_violation_from_exception(exc: Exception) -> dict[str, str] | None:
+    response_json = getattr(exc, "response_json", None)
+    if not isinstance(response_json, dict):
+        return None
+    error = response_json.get("error")
+    if not isinstance(error, dict):
+        return None
+    for item in error.get("details", []):
+        if not isinstance(item, dict):
+            continue
+        violations = item.get("violations")
+        if not isinstance(violations, list):
+            continue
+        for violation in violations:
+            if isinstance(violation, dict):
+                return {
+                    "quota_id": str(violation.get("quotaId", "")).strip(),
+                    "quota_metric": str(violation.get("quotaMetric", "")).strip(),
+                    "quota_value": str(violation.get("quotaValue", "")).strip(),
+                }
+    return None
+
+
+def _quota_scope_from_quota_id(quota_id: str | None) -> str:
+    if not quota_id:
+        return "unknown"
+    lowered = quota_id.lower()
+    if "perday" in lowered:
+        return "daily"
+    if "perminute" in lowered:
+        return "minute"
+    return "unknown"
+
+
+def _build_quota_error_info(exc: Exception) -> QuotaErrorInfo:
+    violation = _quota_violation_from_exception(exc) or {}
+    quota_id = violation.get("quota_id") or None
+    return QuotaErrorInfo(
+        status_code=_status_code_from_exception(exc),
+        detail=_extract_api_error_detail(exc),
+        retry_delay_seconds=_retry_delay_seconds_from_exception(exc),
+        quota_id=quota_id,
+        quota_metric=violation.get("quota_metric") or None,
+        quota_value=violation.get("quota_value") or None,
+        quota_scope=_quota_scope_from_quota_id(quota_id),
+    )
+
+
 def _max_429_attempts() -> int:
     raw_value = os.getenv(LLM_MAX_429_ATTEMPTS_ENV, "").strip()
     if not raw_value:
@@ -242,6 +330,17 @@ def _backoff_base_seconds() -> float:
     return max(0.1, parsed)
 
 
+def _max_total_wait_seconds() -> float:
+    raw_value = os.getenv(LLM_MAX_TOTAL_WAIT_SECONDS_ENV, "").strip()
+    if not raw_value:
+        return DEFAULT_MAX_TOTAL_WAIT_SECONDS
+    try:
+        parsed = float(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_TOTAL_WAIT_SECONDS
+    return max(0.0, parsed)
+
+
 def _request_content_with_backoff(
     client: Any,
     *,
@@ -252,6 +351,8 @@ def _request_content_with_backoff(
     logger = logging.getLogger("ai_resume_tailor")
     max_attempts = _max_429_attempts()
     base_delay_seconds = _backoff_base_seconds()
+    max_total_wait_seconds = _max_total_wait_seconds()
+    waited_seconds_total = 0.0
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -271,16 +372,38 @@ def _request_content_with_backoff(
                 status_code if status_code is not None else "-",
                 detail,
             )
-            if not _is_retryable_quota_error(exc) or attempt >= max_attempts:
+            if not _is_retryable_quota_error(exc):
                 raise
 
-            retry_hint_seconds = _retry_delay_seconds_from_exception(exc)
+            quota_info = _build_quota_error_info(exc)
+            if quota_info.quota_scope == "daily":
+                logger.error(
+                    "LLM quota exhausted scope=%s quota_id=%s metric=%s value=%s",
+                    quota_info.quota_scope,
+                    quota_info.quota_id or "-",
+                    quota_info.quota_metric or "-",
+                    quota_info.quota_value or "-",
+                )
+                raise QuotaExceededError(quota_info) from exc
+
+            if attempt >= max_attempts:
+                raise QuotaExceededError(quota_info) from exc
+
+            retry_hint_seconds = quota_info.retry_delay_seconds
             backoff_seconds = base_delay_seconds * (2 ** (attempt - 1))
             wait_seconds = (
                 max(backoff_seconds, retry_hint_seconds)
                 if retry_hint_seconds is not None
                 else backoff_seconds
             )
+            remaining_wait_budget = max_total_wait_seconds - waited_seconds_total
+            if remaining_wait_budget <= 0:
+                raise QuotaExceededError(quota_info) from exc
+            if wait_seconds > remaining_wait_budget:
+                wait_seconds = remaining_wait_budget
+            if wait_seconds <= 0:
+                raise QuotaExceededError(quota_info) from exc
+
             logger.warning(
                 "LLM retry scheduled attempt=%s/%s wait_s=%.2f status_code=%s detail=%s",
                 attempt + 1,
@@ -290,6 +413,9 @@ def _request_content_with_backoff(
                 detail,
             )
             time.sleep(wait_seconds)
+            waited_seconds_total += wait_seconds
+
+    raise LlmClientError("LLM request failed after retry loop.")
 
 
 def _request_content(
@@ -331,6 +457,8 @@ def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
             include_schema=True,
         )
     except Exception as exc:
+        if isinstance(exc, QuotaExceededError):
+            raise
         if not _is_schema_config_error(exc):
             raise LlmClientError(
                 f"Gemini request failed: {_extract_api_error_detail(exc)}"
@@ -343,6 +471,8 @@ def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
                 include_schema=False,
             )
         except Exception as fallback_exc:
+            if isinstance(fallback_exc, QuotaExceededError):
+                raise
             raise LlmClientError(
                 "Gemini request failed after schema fallback: "
                 f"{_extract_api_error_detail(fallback_exc)}"

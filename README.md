@@ -100,9 +100,9 @@ Current CLI commands:
 
 ```sh
 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
-python main.py resume --run-path ./runs/26.03.06-stripe
+python main.py resume --run-path ./runs/stripe
 # or
-python main.py resume --checkpoint-path ./runs/26.03.06-stripe/state_checkpoint.json
+python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 ```
 
 ---
@@ -226,11 +226,14 @@ $env:ART_LLM_BACKOFF_BASE_SECONDS="2"
 **2. Resume a Paused Review Session (from JSON Checkpoint):**
 
 ```sh
-python main.py resume --run-path ./runs/26.03.06-stripe
+python main.py resume --run-path ./runs/stripe
 # or
-python main.py resume --checkpoint-path ./runs/26.03.06-stripe/state_checkpoint.json
+python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 
 ```
+
+Run folders are now reused by company slug (`runs/<company-slug>`).  
+If you want a separate run, use a unique company name/suffix (for example `"Stripe-v2"`).
 
 *(Optional: Insert a `.gif` here showing your CLI menu in action. Hiring managers love seeing the tool actually working in a terminal).*
 
