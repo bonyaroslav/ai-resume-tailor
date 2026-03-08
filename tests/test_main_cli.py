@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from graph_state import SectionState, Variation
+from graph_state import GraphState, SectionState, Variation
 from main import (
+    _ensure_regenerate_allowed,
+    _normalize_regeneration_note,
     _parse_requested_sections,
     _resolve_run_checkpoint_pair,
     _selected_variation_score,
@@ -81,3 +83,36 @@ def test_selected_variation_score_returns_none_when_not_found() -> None:
         ],
     )
     assert _selected_variation_score(section_state) is None
+
+
+def test_normalize_regeneration_note_rejects_empty() -> None:
+    with pytest.raises(ValueError):
+        _normalize_regeneration_note("   ")
+
+
+def test_normalize_regeneration_note_strips_value() -> None:
+    assert _normalize_regeneration_note("  improve metrics  ") == "improve metrics"
+
+
+def test_ensure_regenerate_allowed_rejects_non_completed() -> None:
+    section_state = SectionState()
+    state = GraphState(
+        run_id="run-1",
+        status="running",
+        current_node="review",
+        section_states={"section_professional_summary": section_state},
+    )
+    with pytest.raises(ValueError):
+        _ensure_regenerate_allowed(state)
+
+
+def test_ensure_regenerate_allowed_rejects_triage_stop() -> None:
+    section_state = SectionState()
+    state = GraphState(
+        run_id="run-2",
+        status="completed",
+        current_node="triage_stop",
+        section_states={"section_professional_summary": section_state},
+    )
+    with pytest.raises(ValueError):
+        _ensure_regenerate_allowed(state)

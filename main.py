@@ -192,20 +192,7 @@ def _prompt_action(prompt_text: str, allowed: dict[str, str]) -> str:
         )
 
 
-def _mark_sections_for_regeneration(state: GraphState, section_ids: list[str]) -> None:
-    for section_id in section_ids:
-        section_state = state.section_states[section_id]
-        section_state.status = "retry_requested"
-        section_state.selected_variation_id = None
-        section_state.selected_content = None
-        section_state.user_note = None
-    state.status = "running"
-    state.current_node = "review"
-    state.review_queue = section_ids
-    touch_state(state)
-
-
-def _mark_sections_for_regeneration_with_note(
+def _mark_sections_for_regeneration(
     state: GraphState, section_ids: list[str], note: str
 ) -> None:
     for section_id in section_ids:
@@ -311,6 +298,35 @@ def _parse_requested_sections(raw_sections: str) -> list[str]:
     return unique_parsed
 
 
+def _normalize_regeneration_note(raw_note: str) -> str:
+    note = raw_note.strip()
+    if not note:
+        raise ValueError("Regeneration note cannot be empty.")
+    return note
+
+
+def _prompt_regeneration_note() -> str:
+    while True:
+        raw_note = input("Regeneration note: ")
+        try:
+            return _normalize_regeneration_note(raw_note)
+        except ValueError as exc:
+            print(str(exc))
+
+
+def _ensure_regenerate_allowed(state: GraphState) -> None:
+    if state.current_node == "triage_stop":
+        raise ValueError(
+            "Cannot regenerate because this run stopped at triage. "
+            "Resume the run and choose continue_anyway first."
+        )
+    if state.status != "completed" or state.current_node != "completed":
+        raise ValueError(
+            "Regenerate is only available for completed runs. "
+            "Use resume for in-progress runs."
+        )
+
+
 def _resolve_run_state_for_run_command(
     *,
     run_dir: Path,
@@ -370,7 +386,8 @@ def _resolve_run_state_for_run_command(
             return state, "resume"
         if action == "regenerate":
             target_sections = _prompt_sections_for_regeneration()
-            _mark_sections_for_regeneration(state, target_sections)
+            note = _prompt_regeneration_note()
+            _mark_sections_for_regeneration(state, target_sections, note)
             save_checkpoint(checkpoint_path, state)
             return state, "resume"
         return state, "exit"
@@ -629,10 +646,18 @@ def _handle_status(args: argparse.Namespace) -> None:
 async def _handle_regenerate(args: argparse.Namespace) -> None:
     run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
     state = load_checkpoint(checkpoint_path)
+    try:
+        _ensure_regenerate_allowed(state)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     metadata = load_run_metadata(run_dir)
     jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
     sections = _parse_requested_sections(args.sections)
-    _mark_sections_for_regeneration_with_note(state, sections, args.note.strip())
+    try:
+        note = _normalize_regeneration_note(args.note)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    _mark_sections_for_regeneration(state, sections, note)
     save_checkpoint(checkpoint_path, state)
 
     model_name = args.model or metadata.get("model_name", DEFAULT_MODEL)
