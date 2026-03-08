@@ -159,6 +159,14 @@ Offline support rules:
 - Optional offline auto-review shortcut via `ART_AUTO_APPROVE_REVIEW=1`.
 - Default behavior remains interactive HITL and real Gemini mode.
 
+Console UI rules:
+
+- Rich console prompt/response rendering is enabled by default.
+- Disable entirely with `ART_UI_ENABLED=0`.
+- Toggle prompt preview via `ART_UI_SHOW_PROMPTS=0`.
+- Toggle AI variation preview via `ART_UI_SHOW_RESPONSES=0`.
+- Tune colors via `ART_UI_*_STYLE` environment variables.
+
 ## Privacy and logging
 
 - Artifacts stay under `runs/`.

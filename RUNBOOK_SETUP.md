@@ -76,7 +76,20 @@ Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
 - Rate-limit errors: reduce run frequency or wait for quota reset.
 - Template errors: verify default template exists at `knowledge/Default Template - Senior Software Engineer.docx`.
 
-## 9. Security basics
+## 9. Console UI tuning
+
+The terminal prompt and AI response preview is enabled by default.
+
+```powershell
+$env:ART_UI_ENABLED="1"
+$env:ART_UI_SHOW_PROMPTS="1"
+$env:ART_UI_SHOW_RESPONSES="1"
+$env:ART_UI_PROMPT_BORDER_STYLE="bright_cyan"
+$env:ART_UI_RESPONSE_BORDER_STYLE="bright_green"
+$env:ART_UI_SCORE_STYLE="bold bright_magenta"
+```
+
+## 10. Security basics
 
 - Never commit API keys to git.
 - Never log raw secrets or full private content.

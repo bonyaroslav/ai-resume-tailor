@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from time import monotonic
 from pathlib import Path
 
 from checkpoint import save_checkpoint
+from console_ui import render_prompt, render_variations
 from document_builder import (
     assemble_cv_document,
     preflight_template,
@@ -27,6 +29,7 @@ from workflow_definition import (
 MAX_AUTOMATIC_PARSE_RETRIES = 1
 MAX_USER_RETRIES_PER_SECTION = 2
 LLM_HEARTBEAT_INTERVAL_SECONDS = 15
+LLM_HEARTBEAT_INTERVAL_ENV = "ART_LLM_HEARTBEAT_SECONDS"
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,17 @@ def _triage_is_no_go(variation: Variation) -> bool:
     return "no-go" in verdict_text or "avoid" in verdict_text
 
 
+def _heartbeat_interval_seconds() -> int:
+    raw_value = os.getenv(LLM_HEARTBEAT_INTERVAL_ENV, "").strip()
+    if not raw_value:
+        return LLM_HEARTBEAT_INTERVAL_SECONDS
+    try:
+        interval = int(raw_value)
+    except ValueError:
+        return LLM_HEARTBEAT_INTERVAL_SECONDS
+    return max(1, interval)
+
+
 async def _generate_section_variations(
     section_id: str,
     section_state: SectionState,
@@ -70,13 +84,16 @@ async def _generate_section_variations(
         job_description=context.job_description,
         retry_note=section_state.user_note,
     )
+    render_prompt(section_id, prompt)
 
     last_error: Exception | None = None
+    heartbeat_interval_seconds = _heartbeat_interval_seconds()
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
         logger.info(
-            "LLM request started section_id=%s attempt=%s",
+            "LLM request started section_id=%s attempt=%s heartbeat_s=%s",
             section_id,
             attempt + 1,
+            heartbeat_interval_seconds,
         )
         request_started = monotonic()
         request_task = asyncio.create_task(
@@ -88,7 +105,7 @@ async def _generate_section_variations(
             try:
                 raw_response = await asyncio.wait_for(
                     asyncio.shield(request_task),
-                    timeout=LLM_HEARTBEAT_INTERVAL_SECONDS,
+                    timeout=heartbeat_interval_seconds,
                 )
                 break
             except asyncio.TimeoutError:
@@ -146,6 +163,7 @@ async def _generate_section_variations(
                 detail="Envelope contains no variations.",
             )
             continue
+        render_variations(section_id, envelope.variations)
         return envelope.variations
 
     log_failure(
