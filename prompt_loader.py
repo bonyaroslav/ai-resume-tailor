@@ -83,24 +83,20 @@ def _validate_frontmatter_and_resolve_context(
     return resolved_paths
 
 
-def _is_example_prompt(path: Path) -> bool:
-    return path.name.endswith(".example.md")
-
-
 def discover_prompt_templates(
     prompts_dir: Path, knowledge_dir: Path
 ) -> dict[str, PromptTemplate]:
     raw_paths = sorted(prompts_dir.glob("*.md"))
     active: dict[str, Path] = {}
-    examples: dict[str, list[Path]] = {}
+    example_only_sections: set[str] = set()
 
     for path in raw_paths:
         section_id = canonical_section_id_from_prompt_path(path)
         if section_id not in WORKFLOW_SECTION_IDS:
             continue
 
-        if _is_example_prompt(path):
-            examples.setdefault(section_id, []).append(path)
+        if path.name.endswith(".example.md"):
+            example_only_sections.add(section_id)
             continue
 
         if section_id in active:
@@ -109,21 +105,29 @@ def discover_prompt_templates(
             )
         active[section_id] = path
 
-    for section_id, candidates in examples.items():
-        if section_id in active:
-            continue
-        if len(candidates) > 1:
-            raise PromptValidationError(
-                f"Duplicate example prompts normalize to section_id '{section_id}'."
-            )
-        active[section_id] = candidates[0]
-
     missing_sections = [
         section_id for section_id in WORKFLOW_SECTION_IDS if section_id not in active
     ]
     if missing_sections:
         missing = ", ".join(missing_sections)
-        raise PromptValidationError(f"Missing prompt files for sections: {missing}")
+        example_only_missing = [
+            section_id
+            for section_id in missing_sections
+            if section_id in example_only_sections
+        ]
+        if example_only_missing:
+            example_only = ", ".join(example_only_missing)
+            raise PromptValidationError(
+                "Missing prompt files without '.example' suffix for sections: "
+                f"{missing}. Found only example files for: {example_only}. "
+                "Create your own prompt files in 'prompts/' with '.md' names "
+                "(without '.example')."
+            )
+        raise PromptValidationError(
+            "Missing prompt files for sections: "
+            f"{missing}. Create prompt files in 'prompts/' with '.md' names "
+            "(without '.example')."
+        )
 
     templates: dict[str, PromptTemplate] = {}
     for section_id in WORKFLOW_SECTION_IDS:

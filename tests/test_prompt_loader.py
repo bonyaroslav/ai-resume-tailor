@@ -101,3 +101,22 @@ def test_discover_prompt_templates_fails_on_duplicate_normalized_experience_sect
 
     with pytest.raises(PromptValidationError):
         discover_prompt_templates(prompts_dir, knowledge_dir)
+
+
+def test_discover_prompt_templates_rejects_example_only_files() -> None:
+    tmp_path = make_workspace_temp_dir("prompt-loader-example-only")
+    prompts_dir = tmp_path / "prompts"
+    knowledge_dir = tmp_path / "knowledge"
+    _write(prompts_dir / "triage_job_fit_and_risks.example.md", "Triage")
+    _write(prompts_dir / "section_professional_summary.example.md", "Summary")
+    _write(prompts_dir / "section_skills_alignment.example.md", "Skills")
+    _write(prompts_dir / "section_experience_1_oldest.example.md", "Exp1")
+    _write(prompts_dir / "section_experience_2_previous.example.md", "Exp2")
+    _write(prompts_dir / "section_experience_3_latest.example.md", "Exp3")
+    _write(prompts_dir / "doc_cover_letter.example.md", "Cover")
+
+    with pytest.raises(PromptValidationError) as exc_info:
+        discover_prompt_templates(prompts_dir, knowledge_dir)
+    message = str(exc_info.value)
+    assert "without '.example' suffix" in message
+    assert "Create your own prompt files" in message
