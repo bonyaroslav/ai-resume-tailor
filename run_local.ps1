@@ -31,10 +31,12 @@ $requirementsFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerCo
 $apiKeyFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.ApiKeyFile
 $jdPath = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.JobDescriptionPath
 $companyName = [string]$RunnerConfig.CompanyName
-$modelName = [string]$RunnerConfig.ModelName
+$tierName = [string]$RunnerConfig.TierName
+$manualModelName = [string]$RunnerConfig.ModelName
 $templatePath = [string]$RunnerConfig.TemplatePath
 $debugMode = [bool]$RunnerConfig.Debug
 $runHealthCheck = [bool]$RunnerConfig.RunHealthCheck
+$tierProfiles = $RunnerConfig.TierProfiles
 
 if (-not (Test-Path -LiteralPath $projectRoot)) {
     throw "ProjectRoot not found: $projectRoot"
@@ -54,8 +56,23 @@ if (-not (Test-Path -LiteralPath $jdPath)) {
 if ([string]::IsNullOrWhiteSpace($companyName)) {
     throw "CompanyName must not be empty in runner.config.ps1"
 }
+if ([string]::IsNullOrWhiteSpace($tierName)) {
+    throw "TierName must not be empty in runner.config.ps1"
+}
+if (-not $tierProfiles) {
+    throw "TierProfiles must be defined in runner.config.ps1"
+}
+$tierProfile = $tierProfiles[$tierName]
+if (-not $tierProfile) {
+    $knownTiers = ($tierProfiles.Keys | Sort-Object) -join ", "
+    throw "Unknown TierName '$tierName'. Available tiers: $knownTiers"
+}
+$modelName = [string]$tierProfile.ModelName
+if (-not [string]::IsNullOrWhiteSpace($manualModelName)) {
+    $modelName = $manualModelName
+}
 if ([string]::IsNullOrWhiteSpace($modelName)) {
-    throw "ModelName must not be empty in runner.config.ps1"
+    throw "ModelName is empty after tier resolution. Set TierProfiles.<TierName>.ModelName or RunnerConfig.ModelName."
 }
 
 $apiKey = (Get-Content -LiteralPath $apiKeyFile -Raw).Trim()
@@ -71,6 +88,17 @@ Write-Host "[2/5] Installing requirements from $requirementsFile"
 
 Write-Host "[3/5] Exporting GEMINI_API_KEY from $apiKeyFile"
 $env:GEMINI_API_KEY = $apiKey
+$env:ART_GENERATION_MODE = [string]$tierProfile.GenerationMode
+$env:ART_LLM_MIN_INTERVAL_SECONDS = [string]$tierProfile.MinIntervalSeconds
+$env:ART_LLM_MAX_429_ATTEMPTS = [string]$tierProfile.Max429Attempts
+$env:ART_LLM_BACKOFF_BASE_SECONDS = [string]$tierProfile.BackoffBaseSeconds
+
+Write-Host "      TierName=$tierName"
+Write-Host "      ModelName=$modelName"
+Write-Host "      ART_GENERATION_MODE=$env:ART_GENERATION_MODE"
+Write-Host "      ART_LLM_MIN_INTERVAL_SECONDS=$env:ART_LLM_MIN_INTERVAL_SECONDS"
+Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
+Write-Host "      ART_LLM_BACKOFF_BASE_SECONDS=$env:ART_LLM_BACKOFF_BASE_SECONDS"
 
 if ($runHealthCheck) {
     Write-Host "[4/5] Running Gemini health check with model $modelName"

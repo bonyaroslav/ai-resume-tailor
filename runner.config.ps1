@@ -7,7 +7,29 @@ $RunnerConfig = @{
 
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Mindera.txt"
     CompanyName = "Mindera"
-    ModelName = "gemini-2.5-flash"
+    TierName = "freetier"
+
+    # Manual override for the selected tier model.
+    # Leave empty to use TierProfiles.<TierName>.ModelName.
+    ModelName = ""
+
+    # One-place switch for model + throughput behavior.
+    TierProfiles = @{
+        freetier = @{
+            ModelName = "gemini-2.5-flash"
+            GenerationMode = "sequential"
+            MinIntervalSeconds = "15"
+            Max429Attempts = "2"
+            BackoffBaseSeconds = "2"
+        }
+        heavy_model = @{
+            ModelName = "gemini-2.5-pro"
+            GenerationMode = "concurrent"
+            MinIntervalSeconds = "0"
+            Max429Attempts = "5"
+            BackoffBaseSeconds = "1"
+        }
+    }
 
     # Optional
     TemplatePath = ""
