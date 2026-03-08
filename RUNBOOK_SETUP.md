@@ -61,6 +61,35 @@ Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
 .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
 ```
 
+### One-command local runner (recommended)
+
+Use the built-in runner so you do not re-enter API key, company, or JD path every time.
+
+1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
+2. Put your real Gemini API key in `secrets\gemini_api_key.txt` (this path is gitignored).
+3. Edit `runner.config.ps1` once:
+   - `JobDescriptionPath`
+   - `CompanyName`
+   - `ModelName` (optional, default shown is `gemini-2.5-flash`)
+4. Run:
+
+```powershell
+.\run_local.ps1
+```
+
+This executes: project cd, dependency install, API key load from file, optional Gemini health check, and `main.py run`.
+
+### Model selection (where to change)
+
+You can choose model in your local app, not only in Google AI Studio:
+
+- `runner.config.ps1` -> `ModelName`
+- CLI -> `--model`
+- env var -> `$env:GEMINI_MODEL="..."`
+- code default -> `DEFAULT_MODEL` in `main.py`
+
+Google AI Studio controls account access, quotas, and billing, but model choice is set by this project.
+
 ## 7. Resume a paused run
 
 ```powershell
@@ -73,7 +102,14 @@ Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
 
 - `Missing GEMINI_API_KEY`: set `$env:GEMINI_API_KEY` in current shell.
 - Prompt loading fails: check `knowledge_files` names exist in `knowledge/`.
-- Rate-limit errors: reduce run frequency or wait for quota reset.
+- Rate-limit errors:
+  - Free tier default is already safer now: sequential generation + `12s` pacing.
+  - Tune with env vars:
+    - `$env:ART_GENERATION_MODE="sequential"` or `"concurrent"`
+    - `$env:ART_LLM_MIN_INTERVAL_SECONDS="12"`
+    - `$env:ART_LLM_MAX_429_ATTEMPTS="5"`
+    - `$env:ART_LLM_BACKOFF_BASE_SECONDS="2"`
+  - For paid tier high speed: switch to `concurrent` and lower pacing (for example `0` to disable spacing).
 - Template errors: verify default template exists at `knowledge/Default Template - Senior Software Engineer.docx`.
 
 ## 9. Console UI tuning

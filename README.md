@@ -162,6 +162,19 @@ python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 
 `--jd-path` accepts `.txt` or `.docx`.
 
+### One-Command Runner (Windows PowerShell)
+
+If you do not want to type API key / JD path / company each run:
+
+1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
+2. Put your key inside `secrets\gemini_api_key.txt` (gitignored).
+3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `ModelName`).
+4. Run:
+
+```powershell
+.\run_local.ps1
+```
+
 ### Offline Smoke Run (No Network)
 
 Use deterministic local fixtures to validate end-to-end behavior (logs, checkpoint, DOCX output):
@@ -189,6 +202,25 @@ $env:GEMINI_API_KEY="your_api_key_here"
 Remove-Item Env:ART_OFFLINE_MODE -ErrorAction SilentlyContinue
 Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
 python main.py run --jd-path .\inputs\job_description.txt --company "Stripe"
+```
+
+Model can be changed locally via:
+
+- `runner.config.ps1` (`ModelName`)
+- CLI: `--model`
+- env: `$env:GEMINI_MODEL="..."`
+- code default: `DEFAULT_MODEL` in `main.py`
+
+### Throughput Tuning
+
+Defaults are now safer for free tier (sequential + pacing + 429 backoff).  
+You can tune with env vars:
+
+```powershell
+$env:ART_GENERATION_MODE="sequential"   # or "concurrent"
+$env:ART_LLM_MIN_INTERVAL_SECONDS="12"  # lower for higher throughput
+$env:ART_LLM_MAX_429_ATTEMPTS="5"
+$env:ART_LLM_BACKOFF_BASE_SECONDS="2"
 ```
 
 **2. Resume a Paused Review Session (from JSON Checkpoint):**
