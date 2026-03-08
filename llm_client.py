@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from graph_state import ResponseEnvelope
+
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
 DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
@@ -81,6 +83,13 @@ def _extract_text(response: Any) -> str:
     return "\n".join(parts).strip()
 
 
+def _response_config() -> dict[str, Any]:
+    return {
+        "response_mime_type": "application/json",
+        "response_schema": ResponseEnvelope,
+    }
+
+
 def _generate_sync(prompt: str, api_key: str, model: str) -> str:
     try:
         from google import genai
@@ -88,7 +97,17 @@ def _generate_sync(prompt: str, api_key: str, model: str) -> str:
         raise LlmClientError("google-genai is not installed.") from exc
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=model, contents=prompt)
+    response = client.models.generate_content(
+        model=model, contents=prompt, config=_response_config()
+    )
+    parsed = getattr(response, "parsed", None)
+    if parsed is not None:
+        if hasattr(parsed, "model_dump"):
+            parsed = parsed.model_dump()
+        try:
+            return json.dumps(parsed, ensure_ascii=False)
+        except TypeError:
+            pass
     text = _extract_text(response)
     if not text:
         raise LlmClientError("Gemini response did not include text output.")

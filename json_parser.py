@@ -40,9 +40,51 @@ def _remove_trailing_commas(text: str) -> str:
     return _TRAILING_COMMA_PATTERN.sub(r"\1", text)
 
 
+def _extract_first_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escaping = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaping:
+                escaping = False
+            elif char == "\\":
+                escaping = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            depth += 1
+            continue
+        if char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
 def parse_response_envelope(raw_text: str) -> ResponseEnvelope:
     cleaned = clean_llm_json(raw_text)
-    candidates = [cleaned, _remove_trailing_commas(cleaned)]
+    raw_candidates = [cleaned]
+    extracted = _extract_first_json_object(cleaned)
+    if extracted:
+        raw_candidates.append(extracted)
+
+    candidates: list[str] = []
+    for candidate in raw_candidates:
+        for variant in (candidate, _remove_trailing_commas(candidate)):
+            if variant not in candidates:
+                candidates.append(variant)
+
     last_error: JSONDecodeError | None = None
 
     for candidate in candidates:
@@ -52,7 +94,12 @@ def parse_response_envelope(raw_text: str) -> ResponseEnvelope:
         except JSONDecodeError as exc:
             last_error = exc
     else:
-        raise ResponseParseError("Malformed JSON in LLM response.") from last_error
+        line = last_error.lineno if last_error else "?"
+        column = last_error.colno if last_error else "?"
+        char = last_error.pos if last_error else "?"
+        raise ResponseParseError(
+            f"Malformed JSON in LLM response at line={line} column={column} char={char}."
+        ) from last_error
 
     try:
         return ResponseEnvelope.model_validate(parsed)
