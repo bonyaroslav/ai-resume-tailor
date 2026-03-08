@@ -17,7 +17,7 @@ from graph_nodes import (
     node_triage,
 )
 from graph_router import route_next_node
-from graph_state import GraphState, create_initial_state, touch_state
+from graph_state import GraphState, SectionState, create_initial_state, touch_state
 from job_description_loader import read_job_description
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
@@ -53,6 +53,30 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_group.add_argument("--run-path", type=Path)
     resume_group.add_argument("--checkpoint-path", type=Path)
     resume_parser.add_argument("--model", default=None)
+
+    status_parser = subparsers.add_parser(
+        "status", help="Show status summary for a run"
+    )
+    status_group = status_parser.add_mutually_exclusive_group(required=True)
+    status_group.add_argument("--run-path", type=Path)
+    status_group.add_argument("--checkpoint-path", type=Path)
+
+    regenerate_parser = subparsers.add_parser(
+        "regenerate", help="Regenerate selected sections for an existing run"
+    )
+    regenerate_group = regenerate_parser.add_mutually_exclusive_group(required=True)
+    regenerate_group.add_argument("--run-path", type=Path)
+    regenerate_group.add_argument("--checkpoint-path", type=Path)
+    regenerate_parser.add_argument("--sections", required=True)
+    regenerate_parser.add_argument("--note", required=True)
+    regenerate_parser.add_argument("--model", default=None)
+
+    rebuild_parser = subparsers.add_parser(
+        "rebuild-output", help="Rebuild CV and cover letter from approved content"
+    )
+    rebuild_group = rebuild_parser.add_mutually_exclusive_group(required=True)
+    rebuild_group.add_argument("--run-path", type=Path)
+    rebuild_group.add_argument("--checkpoint-path", type=Path)
 
     return parser
 
@@ -122,29 +146,37 @@ def _print_status_summary(state: GraphState, run_dir: Path) -> None:
     )
     print("=" * 72)
 
+    print("Selected variations:")
+    for section_id in GENERATION_SECTION_IDS:
+        section_state = state.section_states[section_id]
+        selected_id = section_state.selected_variation_id or "-"
+        selected_score = _selected_variation_score(section_state)
+        score_text = str(selected_score) if selected_score is not None else "-"
+        print(
+            f"- {section_id}: selected={selected_id}, score_0_to_100={score_text}, status={section_state.status}"
+        )
+
 
 def _print_next_steps(state: GraphState, run_dir: Path) -> None:
     print("What you can do next:")
     if state.status in {"running", "awaiting_review"}:
-        print("1. Resume this run now and continue where it stopped.")
-        print(
-            f"2. Exit and continue later with: python main.py resume --run-path {run_dir}"
-        )
+        print(f"1. Resume: python main.py resume --run-path {run_dir}")
+        print(f"2. Inspect status: python main.py status --run-path {run_dir}")
         return
     if state.status == "failed":
-        print("1. Resume this run now (useful after fixing environment/API issues).")
-        print(
-            f"2. Exit and resume later with: python main.py resume --run-path {run_dir}"
-        )
+        print(f"1. Resume after fix: python main.py resume --run-path {run_dir}")
+        print(f"2. Inspect status: python main.py status --run-path {run_dir}")
         return
     if state.current_node == "triage_stop":
-        print("1. Exit (recommended if triage blockers are real).")
-        print("2. Continue anyway from section generation (skip triage stop).")
+        print(f"1. Resume and continue: python main.py resume --run-path {run_dir}")
+        print(f"2. Inspect status: python main.py status --run-path {run_dir}")
         return
     if state.status == "completed":
-        print("1. Rebuild CV/Cover Letter outputs from approved content.")
-        print("2. Regenerate specific sections and review them again.")
-        print("3. Exit.")
+        print(f"1. Rebuild outputs: python main.py rebuild-output --run-path {run_dir}")
+        print(
+            f'2. Regenerate sections: python main.py regenerate --run-path {run_dir} --sections section_professional_summary --note "improve impact metrics"'
+        )
+        print(f"3. Inspect status: python main.py status --run-path {run_dir}")
         return
     print("1. Exit.")
 
@@ -167,6 +199,22 @@ def _mark_sections_for_regeneration(state: GraphState, section_ids: list[str]) -
         section_state.selected_variation_id = None
         section_state.selected_content = None
         section_state.user_note = None
+    state.status = "running"
+    state.current_node = "review"
+    state.review_queue = section_ids
+    touch_state(state)
+
+
+def _mark_sections_for_regeneration_with_note(
+    state: GraphState, section_ids: list[str], note: str
+) -> None:
+    for section_id in section_ids:
+        section_state = state.section_states[section_id]
+        section_state.status = "retry_requested"
+        section_state.selected_variation_id = None
+        section_state.selected_content = None
+        section_state.user_note = note
+        section_state.variations = []
     state.status = "running"
     state.current_node = "review"
     state.review_queue = section_ids
@@ -213,6 +261,16 @@ def _prepare_rebuild_from_completed_state(state: GraphState) -> bool:
     return True
 
 
+def _selected_variation_score(section_state: SectionState) -> int | None:
+    selected_id = section_state.selected_variation_id
+    if not selected_id:
+        return None
+    for variation in section_state.variations:
+        if variation.id == selected_id:
+            return variation.score_0_to_100
+    return None
+
+
 def _load_metadata_or_default(
     run_dir: Path, args: argparse.Namespace
 ) -> dict[str, str]:
@@ -227,6 +285,30 @@ def _load_metadata_or_default(
             "debug_mode": str(bool(args.debug)).lower(),
         }
     return metadata
+
+
+def _resolve_run_checkpoint_pair(args: argparse.Namespace) -> tuple[Path, Path]:
+    checkpoint_path = getattr(args, "checkpoint_path", None)
+    if checkpoint_path:
+        return checkpoint_path.parent, checkpoint_path
+    run_path = getattr(args, "run_path", None)
+    if run_path:
+        return run_path, run_path / "state_checkpoint.json"
+    raise ValueError("Expected run-path or checkpoint-path.")
+
+
+def _parse_requested_sections(raw_sections: str) -> list[str]:
+    value = raw_sections.strip()
+    if not value:
+        raise ValueError("sections cannot be empty.")
+    if value.lower() == "all":
+        return list(GENERATION_SECTION_IDS)
+    parsed = [item.strip() for item in value.split(",") if item.strip()]
+    unique_parsed = list(dict.fromkeys(parsed))
+    invalid = [item for item in unique_parsed if item not in GENERATION_SECTION_IDS]
+    if invalid:
+        raise ValueError(f"Unknown section ids: {', '.join(invalid)}")
+    return unique_parsed
 
 
 def _resolve_run_state_for_run_command(
@@ -515,12 +597,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
 
 
 async def _handle_resume(args: argparse.Namespace) -> None:
-    if args.checkpoint_path:
-        checkpoint_path = args.checkpoint_path
-        run_dir = checkpoint_path.parent
-    else:
-        run_dir = args.run_path
-        checkpoint_path = run_dir / "state_checkpoint.json"
+    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
 
     state = load_checkpoint(checkpoint_path)
     metadata = load_run_metadata(run_dir)
@@ -542,6 +619,58 @@ async def _handle_resume(args: argparse.Namespace) -> None:
     _print_next_steps(final_state, run_dir)
 
 
+def _handle_status(args: argparse.Namespace) -> None:
+    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
+    state = load_checkpoint(checkpoint_path)
+    _print_status_summary(state, run_dir)
+    _print_next_steps(state, run_dir)
+
+
+async def _handle_regenerate(args: argparse.Namespace) -> None:
+    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
+    state = load_checkpoint(checkpoint_path)
+    metadata = load_run_metadata(run_dir)
+    jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
+    sections = _parse_requested_sections(args.sections)
+    _mark_sections_for_regeneration_with_note(state, sections, args.note.strip())
+    save_checkpoint(checkpoint_path, state)
+
+    model_name = args.model or metadata.get("model_name", DEFAULT_MODEL)
+    context = _prepare_runtime_context(
+        run_dir=run_dir,
+        company_name=metadata["company_name"],
+        job_description=jd_text,
+        template_path=Path(metadata["template_path"]),
+        model_name=model_name,
+        debug_mode=metadata.get("debug_mode", "false") == "true",
+    )
+    final_state = await _run_graph(state, context)
+    _print_status_summary(final_state, run_dir)
+    _print_next_steps(final_state, run_dir)
+
+
+async def _handle_rebuild_output(args: argparse.Namespace) -> None:
+    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
+    state = load_checkpoint(checkpoint_path)
+    if not _prepare_rebuild_from_completed_state(state):
+        raise SystemExit("Rebuild aborted: missing approved content.")
+    save_checkpoint(checkpoint_path, state)
+
+    metadata = load_run_metadata(run_dir)
+    jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
+    context = _prepare_runtime_context(
+        run_dir=run_dir,
+        company_name=metadata["company_name"],
+        job_description=jd_text,
+        template_path=Path(metadata["template_path"]),
+        model_name=metadata.get("model_name", DEFAULT_MODEL),
+        debug_mode=metadata.get("debug_mode", "false") == "true",
+    )
+    final_state = await _run_graph(state, context)
+    _print_status_summary(final_state, run_dir)
+    _print_next_steps(final_state, run_dir)
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -552,6 +681,15 @@ def main() -> None:
             return
         if args.command == "resume":
             asyncio.run(_handle_resume(args))
+            return
+        if args.command == "status":
+            _handle_status(args)
+            return
+        if args.command == "regenerate":
+            asyncio.run(_handle_regenerate(args))
+            return
+        if args.command == "rebuild-output":
+            asyncio.run(_handle_rebuild_output(args))
             return
         parser.error(f"Unknown command: {args.command}")
     except (CheckpointError, PromptValidationError, TemplateValidationError) as exc:

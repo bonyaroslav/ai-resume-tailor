@@ -101,7 +101,15 @@ Google AI Studio controls account access, quotas, and billing, but model choice 
 Run folders are reused by company slug (example: `runs\mindera`).
 If you want a separate run, use a unique company value, for example `"Mindera-v2"`.
 
-## 8. Troubleshooting quick checks
+## 8. Status, targeted regenerate, and rebuild
+
+```powershell
+.\.venv\Scripts\python.exe main.py status --run-path .\runs\<company-slug>
+.\.venv\Scripts\python.exe main.py regenerate --run-path .\runs\<company-slug> --sections section_professional_summary,doc_cover_letter --note "add clearer measurable outcomes"
+.\.venv\Scripts\python.exe main.py rebuild-output --run-path .\runs\<company-slug>
+```
+
+## 9. Troubleshooting quick checks
 
 - `Missing GEMINI_API_KEY`: set `$env:GEMINI_API_KEY` in current shell.
 - Prompt loading fails: check `knowledge_files` names exist in `knowledge/`.
@@ -115,7 +123,7 @@ If you want a separate run, use a unique company value, for example `"Mindera-v2
   - For paid tier high speed: switch to `concurrent` and lower pacing (for example `0` to disable spacing).
 - Template errors: verify default template exists at `knowledge/Default Template - Senior Software Engineer.docx`.
 
-## 9. Console UI tuning
+## 10. Console UI tuning
 
 The terminal prompt and AI response preview is enabled by default.
 
@@ -128,7 +136,7 @@ $env:ART_UI_RESPONSE_BORDER_STYLE="bright_green"
 $env:ART_UI_SCORE_STYLE="bold bright_magenta"
 ```
 
-## 10. Security basics
+## 11. Security basics
 
 - Never commit API keys to git.
 - Never log raw secrets or full private content.

@@ -210,6 +210,17 @@ Goal: make human interaction explicit, resumable, and actionable without forcing
    - Option A: single current checkpoint/state only
    - Option B: keep lightweight snapshots/backups per major transition
 
+### Decisions Implemented
+
+1. Folder naming + reuse policy
+   - Selected: Option A (`runs/<company-slug>` stable reuse).
+2. Behavior when `run` finds an existing completed run
+   - Selected: Option A (status summary + actionable choices).
+3. Control surface for post-run operations
+   - Selected: Option A (explicit `status`, `regenerate`, `rebuild-output`).
+4. History policy inside reused run folders
+   - Selected: Option A (single canonical checkpoint).
+
 ### Step-By-Step Implementation Plan
 
 1. Run discovery and state summary
@@ -261,3 +272,18 @@ Goal: make human interaction explicit, resumable, and actionable without forcing
 3. Users can continue current JD processing without manually hunting for run/checkpoint paths.
 4. Auto-increment folder strategy is removed in favor of explicit reuse policy.
 5. Documentation matches implemented CLI behavior.
+
+### Progress (Current)
+
+1. Completed: explicit status summary + next-step command guidance for run states.
+2. Completed: explicit post-run commands
+   - `status`
+   - `regenerate`
+   - `rebuild-output`
+3. Completed: targeted regeneration with required explicit note.
+4. Completed: docs updated in `README.md` and `RUNBOOK_SETUP.md`.
+5. Completed: tests added for new CLI helper behavior.
+6. Completed: quality gates run
+   - `black .`
+   - `ruff check . --fix`
+   - `pytest`

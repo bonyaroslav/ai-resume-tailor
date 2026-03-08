@@ -103,6 +103,9 @@ python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 python main.py resume --run-path ./runs/stripe
 # or
 python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
+python main.py status --run-path ./runs/stripe
+python main.py regenerate --run-path ./runs/stripe --sections section_professional_summary --note "make outcomes more specific"
+python main.py rebuild-output --run-path ./runs/stripe
 ```
 
 ---
@@ -230,6 +233,14 @@ python main.py resume --run-path ./runs/stripe
 # or
 python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 
+```
+
+**3. Check run status / regenerate / rebuild:**
+
+```sh
+python main.py status --run-path ./runs/stripe
+python main.py regenerate --run-path ./runs/stripe --sections section_professional_summary,doc_cover_letter --note "focus on measurable impact"
+python main.py rebuild-output --run-path ./runs/stripe
 ```
 
 Run folders are now reused by company slug (`runs/<company-slug>`).  
