@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from llm_client import (
+    DEFAULT_MAX_429_ATTEMPTS,
     LlmClientError,
     _generate_with_fallback,
     _response_config,
@@ -53,6 +55,27 @@ def _schema_error() -> FakeClientError:
                                 "description": 'Unknown name "additional_properties"',
                             }
                         ]
+                    }
+                ],
+            }
+        },
+    )
+
+
+def _quota_error(*, retry_delay_seconds: int) -> FakeClientError:
+    return FakeClientError(
+        "request failed",
+        {
+            "error": {
+                "code": 429,
+                "message": (
+                    "Quota exceeded. " f"Please retry in {retry_delay_seconds}.0s."
+                ),
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": f"{retry_delay_seconds}s",
                     }
                 ],
             }
@@ -115,3 +138,55 @@ def test_generate_with_fallback_raises_readable_error_when_fallback_fails() -> N
 
     assert "schema fallback" in str(exc_info.value)
     assert "quota exhausted" in str(exc_info.value)
+
+
+def test_generate_with_fallback_retries_429_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        parsed={
+            "variations": [
+                {
+                    "id": "A",
+                    "score_0_to_5": 5,
+                    "ai_reasoning": "ok",
+                    "content_for_template": "content",
+                }
+            ]
+        }
+    )
+    models = FakeModels([_quota_error(retry_delay_seconds=1), response])
+    client = SimpleNamespace(models=models)
+    waits: list[float] = []
+
+    monkeypatch.setenv("ART_LLM_MAX_429_ATTEMPTS", "5")
+    monkeypatch.setenv("ART_LLM_BACKOFF_BASE_SECONDS", "0.1")
+    monkeypatch.setattr("llm_client.time.sleep", lambda seconds: waits.append(seconds))
+
+    result = _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+
+    assert json.loads(result)["variations"][0]["id"] == "A"
+    assert len(models.calls) == 2
+    assert waits == [1.0]
+
+
+def test_generate_with_fallback_raises_after_max_429_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quota_errors = [
+        _quota_error(retry_delay_seconds=1) for _ in range(DEFAULT_MAX_429_ATTEMPTS)
+    ]
+    models = FakeModels(quota_errors)
+    client = SimpleNamespace(models=models)
+    waits: list[float] = []
+
+    monkeypatch.setenv("ART_LLM_MAX_429_ATTEMPTS", "5")
+    monkeypatch.setenv("ART_LLM_BACKOFF_BASE_SECONDS", "0.1")
+    monkeypatch.setattr("llm_client.time.sleep", lambda seconds: waits.append(seconds))
+
+    with pytest.raises(LlmClientError) as exc_info:
+        _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+
+    assert "Gemini request failed" in str(exc_info.value)
+    assert len(models.calls) == DEFAULT_MAX_429_ATTEMPTS
+    assert waits == [1.0, 1.0, 1.0, 1.0]

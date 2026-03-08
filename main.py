@@ -67,6 +67,16 @@ def _is_truthy_env(value: str | None) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _job_description_preview(job_description: str, *, max_lines: int = 3) -> str:
+    lines = [line.strip() for line in job_description.splitlines() if line.strip()]
+    if not lines:
+        return "-"
+    preview = " | ".join(lines[:max_lines]).strip()
+    if len(lines) > max_lines:
+        return f"{preview} | ..."
+    return preview
+
+
 def _save_checkpoint_or_raise(
     *,
     checkpoint_path: Path,
@@ -93,6 +103,10 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
         "Loaded JD metadata (chars=%s, sha256=%s)",
         len(context.job_description),
         sha256_short(context.job_description),
+    )
+    logger.info(
+        "Loaded JD preview first_3_lines=%s",
+        _job_description_preview(context.job_description, max_lines=3),
     )
 
     while True:

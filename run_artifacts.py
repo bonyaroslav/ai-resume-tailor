@@ -17,11 +17,11 @@ def create_run_directory(runs_dir: Path, company_name: str) -> Path:
     slug = _slugify(company_name)
     base_name = f"{date_prefix}-{slug}"
 
-    candidate = runs_dir / base_name
-    suffix = 2
+    suffix = 1
+    candidate = runs_dir / f"{base_name}-{suffix}"
     while candidate.exists():
-        candidate = runs_dir / f"{base_name}-{suffix}"
         suffix += 1
+        candidate = runs_dir / f"{base_name}-{suffix}"
 
     candidate.mkdir(parents=True, exist_ok=False)
     return candidate

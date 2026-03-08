@@ -30,8 +30,16 @@ MAX_AUTOMATIC_PARSE_RETRIES = 1
 MAX_USER_RETRIES_PER_SECTION = 2
 LLM_HEARTBEAT_INTERVAL_SECONDS = 15
 LLM_HEARTBEAT_INTERVAL_ENV = "ART_LLM_HEARTBEAT_SECONDS"
+LLM_MIN_INTERVAL_SECONDS = 12.0
+LLM_MIN_INTERVAL_ENV = "ART_LLM_MIN_INTERVAL_SECONDS"
+GENERATION_MODE_ENV = "ART_GENERATION_MODE"
+GENERATION_MODE_SEQUENTIAL = "sequential"
+GENERATION_MODE_CONCURRENT = "concurrent"
 REVIEW_STEP_DELIMITER = "=" * 72
 REVIEW_SUB_DELIMITER = "-" * 72
+
+_LAST_LLM_REQUEST_STARTED_AT: float | None = None
+_LLM_PACING_LOCK: asyncio.Lock | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +81,56 @@ def _heartbeat_interval_seconds() -> int:
     return max(1, interval)
 
 
+def _llm_min_interval_seconds() -> float:
+    raw_value = os.getenv(LLM_MIN_INTERVAL_ENV, "").strip()
+    if not raw_value:
+        return LLM_MIN_INTERVAL_SECONDS
+    try:
+        interval = float(raw_value)
+    except ValueError:
+        return LLM_MIN_INTERVAL_SECONDS
+    return max(0.0, interval)
+
+
+def _generation_mode() -> str:
+    mode = os.getenv(GENERATION_MODE_ENV, GENERATION_MODE_SEQUENTIAL).strip().lower()
+    if mode in {GENERATION_MODE_SEQUENTIAL, GENERATION_MODE_CONCURRENT}:
+        return mode
+    return GENERATION_MODE_SEQUENTIAL
+
+
+async def _wait_for_llm_pacing_slot(section_id: str, logger: logging.Logger) -> None:
+    global _LAST_LLM_REQUEST_STARTED_AT
+    global _LLM_PACING_LOCK
+
+    if _LLM_PACING_LOCK is None:
+        _LLM_PACING_LOCK = asyncio.Lock()
+
+    min_interval_seconds = _llm_min_interval_seconds()
+    if min_interval_seconds <= 0:
+        return
+
+    async with _LLM_PACING_LOCK:
+        now = monotonic()
+        if _LAST_LLM_REQUEST_STARTED_AT is not None:
+            elapsed_seconds = now - _LAST_LLM_REQUEST_STARTED_AT
+            wait_seconds = max(0.0, min_interval_seconds - elapsed_seconds)
+            if wait_seconds > 0:
+                logger.info(
+                    "LLM pacing wait section_id=%s wait_s=%.2f min_interval_s=%.2f",
+                    section_id,
+                    wait_seconds,
+                    min_interval_seconds,
+                )
+                await asyncio.sleep(wait_seconds)
+        _LAST_LLM_REQUEST_STARTED_AT = monotonic()
+        logger.info(
+            "LLM pacing slot acquired section_id=%s min_interval_s=%.2f",
+            section_id,
+            min_interval_seconds,
+        )
+
+
 async def _generate_section_variations(
     section_id: str,
     section_state: SectionState,
@@ -91,6 +149,7 @@ async def _generate_section_variations(
     last_error: Exception | None = None
     heartbeat_interval_seconds = _heartbeat_interval_seconds()
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
+        await _wait_for_llm_pacing_slot(section_id, logger)
         logger.info(
             "LLM request started section_id=%s attempt=%s heartbeat_s=%s",
             section_id,
@@ -248,14 +307,33 @@ async def node_generate_sections(
         touch_state(state)
         return state
 
-    logger.info("Generating sections concurrently: %s", ", ".join(targets))
-    tasks = [
-        _generate_section_variations(
-            section_id, state.section_states[section_id], context, logger
-        )
-        for section_id in targets
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    mode = _generation_mode()
+    logger.info(
+        "Generating sections mode=%s count=%s sections=%s",
+        mode,
+        len(targets),
+        ", ".join(targets),
+    )
+    results: list[list[Variation] | Exception] = []
+    if mode == GENERATION_MODE_CONCURRENT:
+        tasks = [
+            _generate_section_variations(
+                section_id, state.section_states[section_id], context, logger
+            )
+            for section_id in targets
+        ]
+        gathered = await asyncio.gather(*tasks, return_exceptions=True)
+        for item in gathered:
+            results.append(item)
+    else:
+        for section_id in targets:
+            try:
+                section_result = await _generate_section_variations(
+                    section_id, state.section_states[section_id], context, logger
+                )
+                results.append(section_result)
+            except Exception as exc:
+                results.append(exc)
 
     for index, result in enumerate(results):
         section_id = targets[index]

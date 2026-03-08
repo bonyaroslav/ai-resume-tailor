@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import re
+import time
 from pathlib import Path
 from typing import Any
 
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
 DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
+LLM_MAX_429_ATTEMPTS_ENV = "ART_LLM_MAX_429_ATTEMPTS"
+LLM_BACKOFF_BASE_SECONDS_ENV = "ART_LLM_BACKOFF_BASE_SECONDS"
+DEFAULT_MAX_429_ATTEMPTS = 5
+DEFAULT_BACKOFF_BASE_SECONDS = 2.0
 
 
 class LlmClientError(RuntimeError):
@@ -153,6 +160,138 @@ def _extract_api_error_detail(exc: Exception) -> str:
     return " | ".join(details) if details else str(exc)
 
 
+def _status_code_from_exception(exc: Exception) -> int | None:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+
+    response_json = getattr(exc, "response_json", None)
+    if not isinstance(response_json, dict):
+        return None
+    error = response_json.get("error")
+    if not isinstance(error, dict):
+        return None
+    code = error.get("code")
+    return code if isinstance(code, int) else None
+
+
+def _parse_seconds(raw_value: str) -> float | None:
+    value = raw_value.strip().lower()
+    if not value:
+        return None
+    if value.endswith("s"):
+        value = value[:-1]
+    try:
+        parsed = float(value)
+    except ValueError:
+        return None
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _retry_delay_seconds_from_exception(exc: Exception) -> float | None:
+    response_json = getattr(exc, "response_json", None)
+    if isinstance(response_json, dict):
+        error = response_json.get("error")
+        if isinstance(error, dict):
+            for item in error.get("details", []):
+                if not isinstance(item, dict):
+                    continue
+                raw_retry_delay = item.get("retryDelay")
+                if isinstance(raw_retry_delay, str):
+                    parsed = _parse_seconds(raw_retry_delay)
+                    if parsed is not None:
+                        return parsed
+
+            message = error.get("message")
+            if isinstance(message, str):
+                match = re.search(r"retry in\s+([0-9]+(?:\.[0-9]+)?)s", message.lower())
+                if match:
+                    return float(match.group(1))
+    return None
+
+
+def _is_retryable_quota_error(exc: Exception) -> bool:
+    status_code = _status_code_from_exception(exc)
+    if status_code == 429:
+        return True
+    detail = _extract_api_error_detail(exc).lower()
+    return "resource_exhausted" in detail or "quota exceeded" in detail
+
+
+def _max_429_attempts() -> int:
+    raw_value = os.getenv(LLM_MAX_429_ATTEMPTS_ENV, "").strip()
+    if not raw_value:
+        return DEFAULT_MAX_429_ATTEMPTS
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_429_ATTEMPTS
+    return max(1, min(parsed, 5))
+
+
+def _backoff_base_seconds() -> float:
+    raw_value = os.getenv(LLM_BACKOFF_BASE_SECONDS_ENV, "").strip()
+    if not raw_value:
+        return DEFAULT_BACKOFF_BASE_SECONDS
+    try:
+        parsed = float(raw_value)
+    except ValueError:
+        return DEFAULT_BACKOFF_BASE_SECONDS
+    return max(0.1, parsed)
+
+
+def _request_content_with_backoff(
+    client: Any,
+    *,
+    prompt: str,
+    model: str,
+    include_schema: bool,
+) -> Any:
+    logger = logging.getLogger("ai_resume_tailor")
+    max_attempts = _max_429_attempts()
+    base_delay_seconds = _backoff_base_seconds()
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return _request_content(
+                client,
+                prompt=prompt,
+                model=model,
+                include_schema=include_schema,
+            )
+        except Exception as exc:
+            status_code = _status_code_from_exception(exc)
+            detail = _extract_api_error_detail(exc)
+            logger.warning(
+                "LLM request failed attempt=%s/%s status_code=%s detail=%s",
+                attempt,
+                max_attempts,
+                status_code if status_code is not None else "-",
+                detail,
+            )
+            if not _is_retryable_quota_error(exc) or attempt >= max_attempts:
+                raise
+
+            retry_hint_seconds = _retry_delay_seconds_from_exception(exc)
+            backoff_seconds = base_delay_seconds * (2 ** (attempt - 1))
+            wait_seconds = (
+                max(backoff_seconds, retry_hint_seconds)
+                if retry_hint_seconds is not None
+                else backoff_seconds
+            )
+            logger.warning(
+                "LLM retry scheduled attempt=%s/%s wait_s=%.2f status_code=%s detail=%s",
+                attempt + 1,
+                max_attempts,
+                wait_seconds,
+                status_code if status_code is not None else "-",
+                detail,
+            )
+            time.sleep(wait_seconds)
+
+
 def _request_content(
     client: Any,
     *,
@@ -185,7 +324,7 @@ def _response_to_text(response: Any) -> str:
 
 def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
     try:
-        response = _request_content(
+        response = _request_content_with_backoff(
             client,
             prompt=prompt,
             model=model,
@@ -197,7 +336,7 @@ def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
                 f"Gemini request failed: {_extract_api_error_detail(exc)}"
             ) from exc
         try:
-            response = _request_content(
+            response = _request_content_with_backoff(
                 client,
                 prompt=prompt,
                 model=model,
