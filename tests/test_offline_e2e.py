@@ -32,6 +32,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
 
     monkeypatch.setenv("ART_OFFLINE_MODE", "1")
     monkeypatch.setenv("ART_AUTO_APPROVE_REVIEW", "1")
+    monkeypatch.setenv("ART_AUTO_APPROVE_TRIAGE", "1")
     monkeypatch.setattr(main, "create_run_directory", lambda _, __: run_dir)
 
     asyncio.run(main._handle_run(args))

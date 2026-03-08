@@ -31,6 +31,7 @@ from workflow_definition import (
 DEFAULT_TEMPLATE_PATH = "knowledge/Default Template - Senior Software Engineer.docx"
 DEFAULT_MODEL = "gemini-2.5-flash"
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
+AUTO_APPROVE_TRIAGE_ENV = "ART_AUTO_APPROVE_TRIAGE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 
 
@@ -69,6 +70,15 @@ def _is_truthy_env(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _truthy_env_with_default(value: str | None, *, default: bool) -> bool:
+    if value is None:
+        return default
+    stripped = value.strip()
+    if not stripped:
+        return default
+    return _is_truthy_env(stripped)
 
 
 def _job_description_preview(job_description: str, *, max_lines: int = 3) -> str:
@@ -438,7 +448,14 @@ def _prepare_runtime_context(
         model_name=model_name,
         prompt_templates=prompt_templates,
         debug_mode=debug_mode,
-        auto_approve_review=_is_truthy_env(os.getenv(AUTO_APPROVE_REVIEW_ENV)),
+        auto_approve_review=_truthy_env_with_default(
+            os.getenv(AUTO_APPROVE_REVIEW_ENV),
+            default=True,
+        ),
+        auto_approve_triage=_truthy_env_with_default(
+            os.getenv(AUTO_APPROVE_TRIAGE_ENV),
+            default=False,
+        ),
     )
 
 

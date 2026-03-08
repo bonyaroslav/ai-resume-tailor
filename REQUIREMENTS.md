@@ -94,7 +94,7 @@ Universal response envelope for every prompt:
   "variations": [
     {
       "id": "A",
-      "score_0_to_5": 5,
+      "score_0_to_100": 5,
       "ai_reasoning": "Reasoning string here",
       "content_for_template": "The actual text to inject into the output"
     }
@@ -183,3 +183,4 @@ Console UI rules:
 - DOCX placeholder preflight and replacement
 - Offline end-to-end workflow test with deterministic local fixtures
 - No live LLM API tests
+

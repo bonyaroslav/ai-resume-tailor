@@ -37,6 +37,7 @@ GENERATION_MODE_SEQUENTIAL = "sequential"
 GENERATION_MODE_CONCURRENT = "concurrent"
 REVIEW_STEP_DELIMITER = "=" * 72
 REVIEW_SUB_DELIMITER = "-" * 72
+TRIAGE_STEP_DELIMITER = "=" * 72
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -56,6 +57,7 @@ class RuntimeContext:
     prompt_templates: dict[str, PromptTemplate]
     debug_mode: bool
     auto_approve_review: bool
+    auto_approve_triage: bool
 
 
 def _find_variation(variations: list[Variation], variation_id: str) -> Variation | None:
@@ -65,9 +67,41 @@ def _find_variation(variations: list[Variation], variation_id: str) -> Variation
     return None
 
 
+def _best_variation(variations: list[Variation]) -> Variation:
+    if not variations:
+        raise ValueError("Cannot select a best variation from an empty list.")
+    ranked = sorted(
+        variations,
+        key=lambda variation: (-variation.score_0_to_100, variation.id),
+    )
+    return ranked[0]
+
+
 def _triage_is_no_go(variation: Variation) -> bool:
     verdict_text = f"{variation.ai_reasoning}\n{variation.content_for_template}".lower()
     return "no-go" in verdict_text or "avoid" in verdict_text
+
+
+def _normalize_triage_action(raw_action: str) -> str:
+    aliases = {
+        "c": "continue",
+        "s": "stop",
+    }
+    action = raw_action.strip().lower()
+    return aliases.get(action, action)
+
+
+def _prompt_triage_confirmation(*, suggested_action: str) -> str:
+    while True:
+        prompt = "Triage decision [continue/stop] (c/s): "
+        if suggested_action == "stop":
+            prompt = "Triage decision [stop/continue] (s/c): "
+        action = _normalize_triage_action(input(prompt))
+        if not action:
+            return suggested_action
+        if action in {"continue", "stop"}:
+            return action
+        print("Invalid decision. Use continue/stop (or c/s).")
 
 
 def _heartbeat_interval_seconds() -> int:
@@ -260,7 +294,7 @@ async def node_triage(
         TRIAGE_SECTION_ID, section_state, context, logger
     )
 
-    selected = variations[0]
+    selected = _best_variation(variations)
     state.section_states[TRIAGE_SECTION_ID] = SectionState(
         status="approved",
         variations=variations,
@@ -270,8 +304,32 @@ async def node_triage(
         retry_count=section_state.retry_count,
     )
 
-    if _triage_is_no_go(selected):
-        logger.info("Triage verdict detected as No-Go. Ending run at triage_stop.")
+    suggested_action = "stop" if _triage_is_no_go(selected) else "continue"
+    user_action = suggested_action
+    if context.auto_approve_triage:
+        logger.info(
+            "Auto triage decision enabled. Using suggested_action=%s",
+            suggested_action,
+        )
+    else:
+        print("")
+        print(TRIAGE_STEP_DELIMITER)
+        print("Job fit triage completed.")
+        print(
+            "AI recommendation: "
+            f"{'STOP (possible poor fit)' if suggested_action == 'stop' else 'CONTINUE'}"
+        )
+        print("Confirm if you want to continue with generation or stop now.")
+        print(TRIAGE_STEP_DELIMITER)
+        user_action = _prompt_triage_confirmation(suggested_action=suggested_action)
+    logger.info(
+        "Triage decision resolved suggested_action=%s user_action=%s",
+        suggested_action,
+        user_action,
+    )
+
+    if user_action == "stop":
+        logger.info("Triage decision is stop. Ending run at triage_stop.")
         state.status = "completed"
         state.current_node = "triage_stop"
         state.review_queue = []
@@ -376,7 +434,7 @@ def _print_section_variations(section_id: str, section_state: SectionState) -> N
     print(f"Section Variations: {section_id}")
     print(REVIEW_SUB_DELIMITER)
     for variation in section_state.variations:
-        print(f"[{variation.id}] score={variation.score_0_to_5}")
+        print(f"[{variation.id}] score={variation.score_0_to_100}")
         print(f"reason: {variation.ai_reasoning}")
         print(variation.content_for_template)
         print(REVIEW_SUB_DELIMITER)
@@ -535,11 +593,19 @@ def node_review(
                 continue
             if not section_state.variations:
                 continue
-            _approve_variation(section_state, section_state.variations[0])
+            selected = _best_variation(section_state.variations)
+            _approve_variation(section_state, selected)
+            rejected = ", ".join(
+                f"{variation.id}:{variation.score_0_to_100}"
+                for variation in section_state.variations
+                if variation.id != selected.id
+            )
             logger.info(
-                "Auto-approved section_id=%s with variation_id=%s",
+                "Auto-approved section_id=%s variation_id=%s score_0_to_100=%s rejected=%s",
                 section_id,
                 section_state.selected_variation_id,
+                selected.score_0_to_100,
+                rejected or "-",
             )
 
     for index, section_id in enumerate(queue, start=1):

@@ -75,7 +75,11 @@ if ([string]::IsNullOrWhiteSpace($modelName)) {
     throw "ModelName is empty after tier resolution. Set TierProfiles.<TierName>.ModelName or RunnerConfig.ModelName."
 }
 
-$apiKey = (Get-Content -LiteralPath $apiKeyFile -Raw).Trim()
+$apiKeyRaw = Get-Content -LiteralPath $apiKeyFile -Raw
+if ($null -eq $apiKeyRaw) {
+    throw "API key file read returned null: $apiKeyFile"
+}
+$apiKey = ([string]$apiKeyRaw).Trim()
 if ([string]::IsNullOrWhiteSpace($apiKey)) {
     throw "API key file is empty: $apiKeyFile"
 }
@@ -92,6 +96,8 @@ $env:ART_GENERATION_MODE = [string]$tierProfile.GenerationMode
 $env:ART_LLM_MIN_INTERVAL_SECONDS = [string]$tierProfile.MinIntervalSeconds
 $env:ART_LLM_MAX_429_ATTEMPTS = [string]$tierProfile.Max429Attempts
 $env:ART_LLM_BACKOFF_BASE_SECONDS = [string]$tierProfile.BackoffBaseSeconds
+$env:ART_AUTO_APPROVE_REVIEW = "1"
+$env:ART_AUTO_APPROVE_TRIAGE = "0"
 
 Write-Host "      TierName=$tierName"
 Write-Host "      ModelName=$modelName"
@@ -99,6 +105,8 @@ Write-Host "      ART_GENERATION_MODE=$env:ART_GENERATION_MODE"
 Write-Host "      ART_LLM_MIN_INTERVAL_SECONDS=$env:ART_LLM_MIN_INTERVAL_SECONDS"
 Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
 Write-Host "      ART_LLM_BACKOFF_BASE_SECONDS=$env:ART_LLM_BACKOFF_BASE_SECONDS"
+Write-Host "      ART_AUTO_APPROVE_REVIEW=$env:ART_AUTO_APPROVE_REVIEW"
+Write-Host "      ART_AUTO_APPROVE_TRIAGE=$env:ART_AUTO_APPROVE_TRIAGE"
 
 if ($runHealthCheck) {
     Write-Host "[4/5] Running Gemini health check with model $modelName"

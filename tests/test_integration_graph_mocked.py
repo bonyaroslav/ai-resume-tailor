@@ -56,6 +56,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         prompt_templates=_build_prompt_templates(run_dir),
         debug_mode=False,
         auto_approve_review=False,
+        auto_approve_triage=False,
     )
 
 
@@ -71,13 +72,13 @@ def _fake_response_for_section(section_id: str) -> str:
         "variations": [
             {
                 "id": "A",
-                "score_0_to_5": 5,
+                "score_0_to_100": 5,
                 "ai_reasoning": reasoning,
                 "content_for_template": content,
             },
             {
                 "id": "B",
-                "score_0_to_5": 3,
+                "score_0_to_100": 3,
                 "ai_reasoning": "Fallback",
                 "content_for_template": f"Fallback content for {section_id}",
             },
@@ -111,7 +112,7 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
         return _fake_response_for_section(resolved_section_id)
 
-    review_inputs = []
+    review_inputs = ["continue"]
     for _ in GENERATION_SECTION_IDS:
         review_inputs.extend(["choose", "A"])
     response_iter = iter(review_inputs)

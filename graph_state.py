@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from workflow_definition import WORKFLOW_SECTION_IDS
 
-STATE_VERSION = "1.0"
+STATE_VERSION = "1.1"
 
 
 def utc_now_iso() -> str:
@@ -18,7 +18,7 @@ class Variation(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     id: str
-    score_0_to_5: int
+    score_0_to_100: int = Field(ge=0, le=100)
     ai_reasoning: str
     content_for_template: str
 

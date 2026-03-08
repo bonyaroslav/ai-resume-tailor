@@ -12,6 +12,39 @@ class CheckpointError(RuntimeError):
     pass
 
 
+def _migrate_state_v1_0_to_v1_1(data: dict[str, object]) -> dict[str, object]:
+    section_states = data.get("section_states")
+    if not isinstance(section_states, dict):
+        data["state_version"] = "1.1"
+        return data
+
+    for section_state in section_states.values():
+        if not isinstance(section_state, dict):
+            continue
+        variations = section_state.get("variations")
+        if not isinstance(variations, list):
+            continue
+        for variation in variations:
+            if not isinstance(variation, dict):
+                continue
+            legacy_score = variation.pop("score_0_to_5", None)
+            if isinstance(legacy_score, int):
+                variation["score_0_to_100"] = max(0, min(100, legacy_score * 20))
+    data["state_version"] = "1.1"
+    return data
+
+
+def _migrate_checkpoint_data(data: dict[str, object]) -> dict[str, object]:
+    version = data.get("state_version")
+    if version == "1.1":
+        return data
+    if version == "1.0":
+        return _migrate_state_v1_0_to_v1_1(data)
+    raise CheckpointError(
+        f"Unsupported checkpoint state_version '{version}'. Expected '1.1'."
+    )
+
+
 def save_checkpoint(checkpoint_path: Path, state: GraphState) -> None:
     touch_state(state)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,10 +67,10 @@ def load_checkpoint(checkpoint_path: Path) -> GraphState:
     except json.JSONDecodeError as exc:
         raise CheckpointError(f"Checkpoint is corrupt JSON: {checkpoint_path}") from exc
 
-    version = data.get("state_version")
-    if version != STATE_VERSION:
+    data = _migrate_checkpoint_data(data)
+    if data.get("state_version") != STATE_VERSION:
         raise CheckpointError(
-            f"Unsupported checkpoint state_version '{version}'. Expected '{STATE_VERSION}'."
+            "Checkpoint migration failed to match GraphState state_version."
         )
 
     try:

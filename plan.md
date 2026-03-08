@@ -2,6 +2,68 @@
 
 This plan is now aligned to the implemented V1 baseline and TODO decisions.
 
+## Next Phase: Auto-First Flow + 0-100 Scoring (Decisions Locked)
+
+Goal: minimize human interaction to one triage decision, complete generation automatically, then support targeted regeneration/rebuild at any later time for the same company run.
+
+### Product Behavior Targets
+
+1. Human gate only at triage
+   - Show triage analysis and recommendation.
+   - User chooses `continue` or `stop`.
+2. Full auto after triage continue
+   - Generate all sections.
+   - Auto-select highest-scored variation per section.
+   - Assemble CV DOCX + cover letter automatically.
+3. Post-completion lifecycle
+   - Re-open same company run days later.
+   - Regenerate selected section(s) with explicit user note.
+   - Rebuild outputs with updated approved content.
+4. Auditability
+   - Log decisions, scores, selected variation IDs, rejected alternatives.
+   - Keep checkpoint resumability and deterministic run artifacts under `runs/`.
+
+### Implementation Steps
+
+1. Prompt and scoring contract migration
+   - Prompt schema changed to `score_0_to_100`.
+   - Enforce distinct ranking instructions (no ties, minimum score gap, sorted high->low).
+   - Update all prompt files under `prompts/` and examples.
+2. Runtime schema migration
+   - Update envelope validation models/parser/client schema from `score_0_to_5` to `score_0_to_100`.
+   - Add deterministic tie-break guard if model still returns duplicate scores.
+   - Keep parser defensive behavior for malformed JSON wrappers.
+3. Review mode defaults
+   - Add explicit review mode control (`auto` default, `manual` optional).
+   - In auto mode, skip interactive per-section review.
+   - Keep triage confirmation interactive by default.
+4. Automatic best-variation selection
+   - Select max score per section in auto mode.
+   - Persist selected variation and metadata in checkpoint state.
+   - Log concise decision lines for each section.
+5. Regeneration after completion
+   - Preserve and polish existing completed-run actions:
+     - regenerate specific sections
+     - inject user comment into prompt (`retry_note`)
+     - rebuild outputs
+   - Ensure completed runs remain re-openable without creating new run folder.
+6. Decision summary artifact
+   - Add `decision_summary.json` (or `.md`) under run folder.
+   - Record triage decision, selected variation per section, score table, regenerate events.
+7. Validation and docs
+   - Update tests for schema migration and auto review flow.
+   - Update README/RUNBOOK usage with triage-first + auto-run + regenerate-later path.
+   - Run `black .`, `ruff check . --fix`, `pytest`.
+
+### Risks and Mitigations
+
+1. Risk: prompt/schema mismatch during migration
+   - Mitigation: migrate prompt + parser + model + tests in one change set.
+2. Risk: model still outputs tied scores
+   - Mitigation: deterministic runtime tie-break + warning log.
+3. Risk: reduced human quality control
+   - Mitigation: strong audit logs + easy regenerate/rebuild loop.
+
 ## Completed
 
 1. Locked canonical `section_id` strategy and workflow inventory.

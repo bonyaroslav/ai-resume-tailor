@@ -10,13 +10,13 @@ def _make_section_state() -> SectionState:
         variations=[
             Variation(
                 id="A",
-                score_0_to_5=5,
+                score_0_to_100=5,
                 ai_reasoning="Best option",
                 content_for_template="Content A",
             ),
             Variation(
                 id="B",
-                score_0_to_5=3,
+                score_0_to_100=3,
                 ai_reasoning="Alternative",
                 content_for_template="Content B",
             ),

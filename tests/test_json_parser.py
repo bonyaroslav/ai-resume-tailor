@@ -17,7 +17,7 @@ def test_clean_llm_json_strips_markdown_fence_and_label() -> None:
   "variations": [
     {
       "id": "A",
-      "score_0_to_5": 5,
+      "score_0_to_100": 5,
       "ai_reasoning": "ok",
       "content_for_template": "hello"
     }
@@ -36,7 +36,7 @@ def test_parse_response_envelope_accepts_trailing_comma() -> None:
   "variations": [
     {
       "id": "A",
-      "score_0_to_5": 4,
+      "score_0_to_100": 4,
       "ai_reasoning": "reason",
       "content_for_template": "content",
     }
@@ -45,7 +45,7 @@ def test_parse_response_envelope_accepts_trailing_comma() -> None:
 """
     envelope = parse_response_envelope(raw)
     assert envelope.variations[0].id == "A"
-    assert envelope.variations[0].score_0_to_5 == 4
+    assert envelope.variations[0].score_0_to_100 == 4
 
 
 def test_parse_response_envelope_rejects_schema_mismatch() -> None:
@@ -60,7 +60,7 @@ Here is the result:
   "variations": [
     {
       "id": "A",
-      "score_0_to_5": 4,
+      "score_0_to_100": 4,
       "ai_reasoning": "reason",
       "content_for_template": "content"
     }
@@ -74,7 +74,7 @@ Thanks!
 
 def test_parse_response_envelope_reports_location_for_malformed_json() -> None:
     with pytest.raises(ResponseParseError) as exc_info:
-        parse_response_envelope('{"variations":[{"id":"A" "score_0_to_5":4}]}')
+        parse_response_envelope('{"variations":[{"id":"A" "score_0_to_100":4}]}')
     message = str(exc_info.value)
     assert "line=" in message
     assert "column=" in message

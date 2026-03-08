@@ -138,13 +138,13 @@ def _response_json_schema() -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "id": {"type": "string"},
-                        "score_0_to_5": {"type": "integer"},
+                        "score_0_to_100": {"type": "integer"},
                         "ai_reasoning": {"type": "string"},
                         "content_for_template": {"type": "string"},
                     },
                     "required": [
                         "id",
-                        "score_0_to_5",
+                        "score_0_to_100",
                         "ai_reasoning",
                         "content_for_template",
                     ],

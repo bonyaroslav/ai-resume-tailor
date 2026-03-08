@@ -91,7 +91,7 @@ To complement the vision above, the current shipped V1 behavior is strict and de
 
 * **Canonical workflow IDs:** `triage_job_fit_and_risks`, `section_professional_summary`, `section_skills_alignment`, `section_experience_1..3`, `doc_cover_letter`
 * **Single checkpoint contract:** `GraphState` persisted as `state_version=1.0` for pause/resume consistency
-* **Strict AI response envelope:** `{"variations":[{"id","score_0_to_5","ai_reasoning","content_for_template"}]}`
+* **Strict AI response envelope:** `{"variations":[{"id","score_0_to_100","ai_reasoning","content_for_template"}]}`
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
 * **Run outputs:** `tailored_cv.docx`, `cover_letter.txt`, checkpoint + metadata + logs under `runs/...`
@@ -249,3 +249,4 @@ All personal receipts, skills, and base CV data live exclusively in the `knowled
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+

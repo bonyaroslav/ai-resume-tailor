@@ -130,7 +130,7 @@ def test_generate_with_fallback_retries_without_schema() -> None:
             "variations": [
                 {
                     "id": "A",
-                    "score_0_to_5": 5,
+                    "score_0_to_100": 5,
                     "ai_reasoning": "ok",
                     "content_for_template": "content",
                 }
@@ -180,7 +180,7 @@ def test_generate_with_fallback_retries_429_then_succeeds(
             "variations": [
                 {
                     "id": "A",
-                    "score_0_to_5": 5,
+                    "score_0_to_100": 5,
                     "ai_reasoning": "ok",
                     "content_for_template": "content",
                 }

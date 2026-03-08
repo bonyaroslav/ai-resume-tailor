@@ -3,7 +3,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 94,
         "ai_reasoning": "Offline emulation indicates good baseline alignment.",
         "content_for_template": "### Location/Legal Risk\nSafe/Unknown for offline emulation.\n\n### Technical Fit\nGreen Flags:\n- Strong Python and API integration experience.\nRed Flags:\n- Validate exact domain depth for the target role.\n\n### VERDICT: APPLY (Go)"
       }
@@ -13,7 +13,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 91,
         "ai_reasoning": "Concise and ATS-aligned summary.",
         "content_for_template": "Senior software engineer with strong Python and data platform delivery experience. Builds production-grade APIs and automation workflows with a focus on reliability and measurable business impact. Aligns technical implementation closely with hiring requirements and ATS keyword targets."
       }
@@ -23,7 +23,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 90,
         "ai_reasoning": "Clear categorized skills structure.",
         "content_for_template": "Languages: Python, SQL, JavaScript\nFrameworks/Tools: FastAPI, pytest, Docker, GitHub Actions\nCloud/Infrastructure: AWS, CI/CD, Linux\nArchitecture/Practices: API design, observability, performance tuning"
       }
@@ -33,7 +33,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 89,
         "ai_reasoning": "Action-oriented and artifact-based bullets.",
         "content_for_template": "- Implemented backend services and integration endpoints that reduced manual support load.\n- Optimized SQL queries and indexing strategy to improve dashboard response times.\n- Instrumented service-level monitoring and alerting for faster incident detection.\n- Deployed CI checks to improve release confidence and code quality."
       }
@@ -43,7 +43,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 88,
         "ai_reasoning": "Balanced technical detail with outcomes.",
         "content_for_template": "- Refactored API contracts to simplify downstream consumer integrations.\n- Implemented data validation rules that reduced production data quality issues.\n- Optimized service workflows to decrease latency and improve throughput.\n- Deployed incremental rollout checks in CI/CD to lower deployment risk."
       }
@@ -53,7 +53,7 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 87,
         "ai_reasoning": "Emphasizes recent high-impact delivery.",
         "content_for_template": "- Implemented scalable data processing pipelines aligned with business SLAs.\n- Diagnosed and resolved reliability bottlenecks across key production services.\n- Instrumented dashboards and SLO tracking to improve operational visibility.\n- Optimized deployment workflow with automated checks and rollback readiness."
       }
@@ -63,10 +63,11 @@
     "variations": [
       {
         "id": "A",
-        "score_0_to_5": 5,
+        "score_0_to_100": 92,
         "ai_reasoning": "Short and specific to technical fit.",
         "content_for_template": "I build production Python services and data workflows with a strong focus on reliability and measurable outcomes. My recent work includes API design, observability improvements, and deployment hardening that match the technical needs in your role. I would value the chance to contribute this hands-on engineering approach to your team."
       }
     ]
   }
 }
+

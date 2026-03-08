@@ -152,7 +152,7 @@ def render_variations(section_id: str, variations: list[Variation]) -> None:
     for variation in variations:
         body = Group(
             Text(
-                _safe_console_text(f"Score: {variation.score_0_to_5}/5"),
+                _safe_console_text(f"Score: {variation.score_0_to_100}/100"),
                 style=styles.score,
             ),
             Text("Reasoning", style=styles.reasoning_label),
