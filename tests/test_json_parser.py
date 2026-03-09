@@ -79,3 +79,9 @@ def test_parse_response_envelope_reports_location_for_malformed_json() -> None:
     assert "line=" in message
     assert "column=" in message
     assert "char=" in message
+
+
+def test_parse_response_envelope_accepts_bom_prefix() -> None:
+    raw = '\ufeff{"variations":[{"id":"A","score_0_to_100":4,"ai_reasoning":"r","content_for_template":"c"}]}'
+    envelope = parse_response_envelope(raw)
+    assert envelope.variations[0].id == "A"

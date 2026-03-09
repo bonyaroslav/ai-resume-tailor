@@ -101,7 +101,30 @@ Google AI Studio controls account access, quotas, and billing, but model choice 
 Run folders are reused by company slug (example: `runs\mindera`).
 If you want a separate run, use a unique company value, for example `"Mindera-v2"`.
 
-## 8. Status, targeted regenerate, and rebuild
+## 8. Full end-to-end command path
+
+Run this sequence for a complete workflow: triage decision -> auto generation -> status review -> targeted regenerate with note -> rebuild outputs.
+
+```powershell
+# 1) Start run and choose triage decision in CLI (continue_anyway/stop)
+.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
+
+# Optional non-interactive path (auto triage + auto review)
+# $env:ART_AUTO_APPROVE_TRIAGE="1"
+# $env:ART_AUTO_APPROVE_REVIEW="1"
+# .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
+
+# 2) Inspect run checkpoint status
+.\.venv\Scripts\python.exe main.py status --run-path .\runs\<company-slug>
+
+# 3) Regenerate selected sections with reviewer instruction
+.\.venv\Scripts\python.exe main.py regenerate --run-path .\runs\<company-slug> --sections section_professional_summary,doc_cover_letter --note "add clearer measurable outcomes"
+
+# 4) Rebuild final files from approved content
+.\.venv\Scripts\python.exe main.py rebuild-output --run-path .\runs\<company-slug>
+```
+
+## 9. Status, targeted regenerate, and rebuild (quick reference)
 
 ```powershell
 .\.venv\Scripts\python.exe main.py status --run-path .\runs\<company-slug>
@@ -109,7 +132,7 @@ If you want a separate run, use a unique company value, for example `"Mindera-v2
 .\.venv\Scripts\python.exe main.py rebuild-output --run-path .\runs\<company-slug>
 ```
 
-## 9. Troubleshooting quick checks
+## 10. Troubleshooting quick checks
 
 - `Missing GEMINI_API_KEY`: set `$env:GEMINI_API_KEY` in current shell.
 - Prompt loading fails: check `knowledge_files` names exist in `knowledge/`.
@@ -123,7 +146,7 @@ If you want a separate run, use a unique company value, for example `"Mindera-v2
   - For paid tier high speed: switch to `concurrent` and lower pacing (for example `0` to disable spacing).
 - Template errors: verify default template exists at `knowledge/Default Template - Senior Software Engineer.docx`.
 
-## 10. Console UI tuning
+## 11. Console UI tuning
 
 The terminal prompt and AI response preview is enabled by default.
 
@@ -136,7 +159,7 @@ $env:ART_UI_RESPONSE_BORDER_STYLE="bright_green"
 $env:ART_UI_SCORE_STYLE="bold bright_magenta"
 ```
 
-## 11. Security basics
+## 12. Security basics
 
 - Never commit API keys to git.
 - Never log raw secrets or full private content.

@@ -21,6 +21,7 @@ class ResponseSchemaError(ValueError):
 
 def clean_llm_json(raw_text: str) -> str:
     text = raw_text.strip()
+    text = text.lstrip("\ufeff")
 
     if text.startswith("```"):
         lines = text.splitlines()

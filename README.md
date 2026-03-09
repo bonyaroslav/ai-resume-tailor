@@ -235,11 +235,22 @@ python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 
 ```
 
-**3. Check run status / regenerate / rebuild:**
+**3. End-to-end flow (triage -> auto generation -> status -> targeted regenerate -> rebuild):**
 
 ```sh
+# Start run and make triage decision in CLI (continue_anyway/stop)
+python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+
+# Optional: force non-interactive smoke path for triage + review
+# ART_AUTO_APPROVE_TRIAGE=1 ART_AUTO_APPROVE_REVIEW=1 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+
+# Review current checkpoint state
 python main.py status --run-path ./runs/stripe
+
+# Regenerate only specific sections with explicit reviewer note
 python main.py regenerate --run-path ./runs/stripe --sections section_professional_summary,doc_cover_letter --note "focus on measurable impact"
+
+# Rebuild final outputs from approved content
 python main.py rebuild-output --run-path ./runs/stripe
 ```
 

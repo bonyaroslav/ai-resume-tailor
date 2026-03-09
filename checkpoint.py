@@ -12,6 +12,12 @@ class CheckpointError(RuntimeError):
     pass
 
 
+def _require_json_object(data: object) -> dict[str, object]:
+    if not isinstance(data, dict):
+        raise CheckpointError("Checkpoint root JSON value must be an object.")
+    return data
+
+
 def _migrate_state_v1_0_to_v1_1(data: dict[str, object]) -> dict[str, object]:
     section_states = data.get("section_states")
     if not isinstance(section_states, dict):
@@ -49,11 +55,14 @@ def save_checkpoint(checkpoint_path: Path, state: GraphState) -> None:
     touch_state(state)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
-    temp_path.write_text(
-        json.dumps(state.model_dump(mode="json"), indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
-    temp_path.replace(checkpoint_path)
+    try:
+        temp_path.write_text(
+            json.dumps(state.model_dump(mode="json"), indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+        temp_path.replace(checkpoint_path)
+    except OSError as exc:
+        raise CheckpointError(f"Unable to write checkpoint: {checkpoint_path}") from exc
 
 
 def load_checkpoint(checkpoint_path: Path) -> GraphState:
@@ -63,10 +72,11 @@ def load_checkpoint(checkpoint_path: Path) -> GraphState:
         raise CheckpointError(f"Unable to read checkpoint: {checkpoint_path}") from exc
 
     try:
-        data = json.loads(raw)
+        loaded = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise CheckpointError(f"Checkpoint is corrupt JSON: {checkpoint_path}") from exc
 
+    data = _require_json_object(loaded)
     data = _migrate_checkpoint_data(data)
     if data.get("state_version") != STATE_VERSION:
         raise CheckpointError(

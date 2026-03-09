@@ -327,6 +327,19 @@ def _ensure_regenerate_allowed(state: GraphState) -> None:
         )
 
 
+def _ensure_rebuild_allowed(state: GraphState) -> None:
+    if state.current_node == "triage_stop":
+        raise ValueError(
+            "Cannot rebuild outputs because this run stopped at triage. "
+            "Resume the run and choose continue_anyway first."
+        )
+    if state.status != "completed" or state.current_node != "completed":
+        raise ValueError(
+            "Rebuild-output is only available for completed runs. "
+            "Use resume for in-progress runs."
+        )
+
+
 def _resolve_run_state_for_run_command(
     *,
     run_dir: Path,
@@ -652,7 +665,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         raise SystemExit(str(exc)) from exc
     metadata = load_run_metadata(run_dir)
     jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
-    sections = _parse_requested_sections(args.sections)
+    try:
+        sections = _parse_requested_sections(args.sections)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     try:
         note = _normalize_regeneration_note(args.note)
     except ValueError as exc:
@@ -677,6 +693,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
 async def _handle_rebuild_output(args: argparse.Namespace) -> None:
     run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
     state = load_checkpoint(checkpoint_path)
+    try:
+        _ensure_rebuild_allowed(state)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if not _prepare_rebuild_from_completed_state(state):
         raise SystemExit("Rebuild aborted: missing approved content.")
     save_checkpoint(checkpoint_path, state)
