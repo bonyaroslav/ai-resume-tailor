@@ -212,7 +212,7 @@ Model can be changed locally via:
 - `runner.config.ps1` (`ModelName`)
 - CLI: `--model`
 - env: `$env:GEMINI_MODEL="..."`
-- code default: `DEFAULT_MODEL` in `main.py`
+- code default: `DEFAULT_GEMINI_MODEL` in `settings.py`
 
 ### Throughput Tuning
 
@@ -225,6 +225,22 @@ $env:ART_LLM_MIN_INTERVAL_SECONDS="12"  # lower for higher throughput
 $env:ART_LLM_MAX_429_ATTEMPTS="5"
 $env:ART_LLM_BACKOFF_BASE_SECONDS="2"
 ```
+
+### Pytest Pacing Defaults (Fast by Default)
+
+`pytest` runs now default to:
+
+- `ART_LLM_MIN_INTERVAL_SECONDS=0`
+
+This keeps local and CI tests fast for mocked/offline flows.
+
+For real Gemini end-to-end tests on free tier, use:
+
+- pytest marker: `@pytest.mark.real_gemini_e2e`
+
+That marker automatically restores pacing to:
+
+- `ART_LLM_MIN_INTERVAL_SECONDS=12`
 
 **2. Resume a Paused Review Session (from JSON Checkpoint):**
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 GEMINI_MODEL_ENV = "GEMINI_MODEL"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
 
 def resolve_gemini_model_name(
