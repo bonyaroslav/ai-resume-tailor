@@ -8,7 +8,12 @@ from time import monotonic
 from pathlib import Path
 
 from checkpoint import save_checkpoint
-from console_ui import render_prompt, render_triage_result, render_variations
+from console_ui import (
+    render_prompt,
+    render_triage_decision_prompt,
+    render_triage_result,
+    render_variations,
+)
 from document_builder import (
     assemble_cv_document,
     preflight_template,
@@ -42,7 +47,6 @@ GENERATION_MODE_SEQUENTIAL = "sequential"
 GENERATION_MODE_CONCURRENT = "concurrent"
 REVIEW_STEP_DELIMITER = "=" * 72
 REVIEW_SUB_DELIMITER = "-" * 72
-TRIAGE_STEP_DELIMITER = "=" * 72
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -404,14 +408,7 @@ async def node_triage(
         )
     else:
         print("")
-        print(TRIAGE_STEP_DELIMITER)
-        print("Job fit triage completed.")
-        print(
-            "AI recommendation: "
-            f"{'STOP (possible poor fit)' if suggested_action == 'stop' else 'CONTINUE'}"
-        )
-        print("Confirm if you want to continue with generation or stop now.")
-        print(TRIAGE_STEP_DELIMITER)
+        render_triage_decision_prompt(suggested_action=suggested_action)
         user_action = _prompt_triage_confirmation(suggested_action=suggested_action)
     logger.info(
         "Triage decision resolved suggested_action=%s user_action=%s",

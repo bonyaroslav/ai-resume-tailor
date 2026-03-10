@@ -34,7 +34,7 @@ def test_render_prompt_truncates_to_first_five_lines(
     assert "... [truncated; total_lines=7]" in output
 
 
-def test_render_triage_result_is_compact(monkeypatch: object) -> None:
+def test_render_triage_result_shows_full_evidence(monkeypatch: object) -> None:
     console = Console(record=True, width=140)
     monkeypatch.setattr(console_ui, "_CONSOLE", console)
     monkeypatch.setenv("ART_UI_ENABLED", "1")
@@ -83,11 +83,32 @@ def test_render_triage_result_is_compact(monkeypatch: object) -> None:
     console_ui.render_triage_result("triage_job_fit_and_risks", triage_result)
     output = console.export_text()
 
-    assert "Verdict: APPLY_WITH_CAVEATS | Score: 74/100 | Confidence: 68/100" in output
-    assert "Top Reasons" in output
+    assert "Decision Overview" in output
+    assert "APPLY WITH CAVEATS" in output
+    assert "Decision Score: 74/100 | Confidence: 68/100" in output
+    assert "Weighted Subscores" in output
+    assert "Risk Register" in output
+    assert "Spain Entity Compatibility" in output
+    assert "Evidence Sources" in output
+    assert "Detailed Report" in output
     assert "Reason 1" in output
-    assert "Top Risks" in output
-    assert "medium: Contract model unclear." in output
+    assert "Contract model unclear." in output
+    assert "Ask recruiter." in output
+    assert "Q1" in output
+    assert "https://example.com" in output
+
+
+def test_render_triage_decision_prompt(monkeypatch: object) -> None:
+    console = Console(record=True, width=140)
+    monkeypatch.setattr(console_ui, "_CONSOLE", console)
+    monkeypatch.setenv("ART_UI_ENABLED", "1")
+
+    console_ui.render_triage_decision_prompt(suggested_action="stop")
+    output = console.export_text()
+
+    assert "Decision Required" in output
+    assert "Job fit triage completed." in output
+    assert "AI recommendation: STOP (possible poor fit)" in output
 
 
 def test_render_variations_skips_triage_section(monkeypatch: object) -> None:
