@@ -10,6 +10,7 @@ import main
 from checkpoint import load_checkpoint, save_checkpoint
 from graph_state import GraphState, Variation, create_initial_state
 from run_artifacts import write_run_metadata
+from settings import DEFAULT_GEMINI_MODEL
 from tests.test_support import make_workspace_temp_dir
 from workflow_definition import GENERATION_SECTION_IDS, TRIAGE_SECTION_ID
 
@@ -23,7 +24,7 @@ def _write_run_fixture(run_dir: Path, state: GraphState) -> None:
             "run_id": run_dir.name,
             "company_name": "Acme",
             "template_path": str(Path(main.DEFAULT_TEMPLATE_PATH)),
-            "model_name": "gemini-2.5-flash",
+            "model_name": DEFAULT_GEMINI_MODEL,
             "debug_mode": "false",
         },
     )

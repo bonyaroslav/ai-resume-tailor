@@ -7,6 +7,7 @@ from pathlib import Path
 from docx import Document
 
 import main
+from settings import DEFAULT_GEMINI_MODEL
 from tests.test_support import make_workspace_temp_dir
 
 
@@ -26,7 +27,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
         jd_path=jd_path,
         company="offline-smoke",
         template_path=Path(main.DEFAULT_TEMPLATE_PATH),
-        model="gemini-2.5-flash",
+        model=DEFAULT_GEMINI_MODEL,
         debug=False,
     )
 

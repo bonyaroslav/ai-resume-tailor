@@ -22,6 +22,7 @@ from job_description_loader import read_job_description
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
+from settings import resolve_gemini_model_name
 from workflow_definition import (
     GENERATION_SECTION_IDS,
     TEMPLATE_SECTION_IDS,
@@ -29,7 +30,6 @@ from workflow_definition import (
 )
 
 DEFAULT_TEMPLATE_PATH = "knowledge/Default Template - Senior Software Engineer.docx"
-DEFAULT_MODEL = "gemini-2.5-flash"
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
 AUTO_APPROVE_TRIAGE_ENV = "ART_AUTO_APPROVE_TRIAGE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
@@ -268,7 +268,7 @@ def _load_metadata_or_default(
             "run_id": run_dir.name,
             "company_name": args.company,
             "template_path": str(args.template_path),
-            "model_name": args.model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
+            "model_name": resolve_gemini_model_name(args.model),
             "debug_mode": str(bool(args.debug)).lower(),
         }
     return metadata
@@ -591,9 +591,10 @@ async def _handle_run(args: argparse.Namespace) -> None:
         jd_text = read_job_description(args.jd_path)
         jd_path.write_text(jd_text, encoding="utf-8")
 
-    model_name = args.model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
-    if "model_name" in metadata and not args.model:
-        model_name = metadata["model_name"]
+    model_name = resolve_gemini_model_name(
+        args.model,
+        metadata_model=metadata.get("model_name"),
+    )
     template_path = Path(metadata.get("template_path", str(args.template_path)))
     debug_mode = metadata.get("debug_mode", "false") == "true"
     if args.debug:
@@ -635,7 +636,10 @@ async def _handle_resume(args: argparse.Namespace) -> None:
     _print_status_summary(state, run_dir)
     _print_next_steps(state, run_dir)
 
-    model_name = args.model or metadata.get("model_name", DEFAULT_MODEL)
+    model_name = resolve_gemini_model_name(
+        args.model,
+        metadata_model=metadata.get("model_name"),
+    )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
@@ -676,7 +680,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
     _mark_sections_for_regeneration(state, sections, note)
     save_checkpoint(checkpoint_path, state)
 
-    model_name = args.model or metadata.get("model_name", DEFAULT_MODEL)
+    model_name = resolve_gemini_model_name(
+        args.model,
+        metadata_model=metadata.get("model_name"),
+    )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
@@ -708,7 +715,10 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
         company_name=metadata["company_name"],
         job_description=jd_text,
         template_path=Path(metadata["template_path"]),
-        model_name=metadata.get("model_name", DEFAULT_MODEL),
+        model_name=resolve_gemini_model_name(
+            explicit_model=None,
+            metadata_model=metadata.get("model_name"),
+        ),
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
     final_state = await _run_graph(state, context)
