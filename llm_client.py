@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from section_ids import is_experience_section
+from workflow_definition import TRIAGE_SECTION_ID
 
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
@@ -131,6 +132,103 @@ def _extract_text(response: Any) -> str:
 
 
 def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
+    if section_id == TRIAGE_SECTION_ID:
+        return {
+            "type": "object",
+            "properties": {
+                "triage_result": {
+                    "type": "object",
+                    "properties": {
+                        "verdict": {"type": "string"},
+                        "decision_score_0_to_100": {"type": "integer"},
+                        "confidence_0_to_100": {"type": "integer"},
+                        "summary": {"type": "string"},
+                        "raw_subscores": {
+                            "type": "object",
+                            "properties": {
+                                "technical_fit_0_to_35": {"type": "integer"},
+                                "company_risk_0_to_20": {"type": "integer"},
+                                "role_quality_0_to_15": {"type": "integer"},
+                                "spain_entity_compat_0_to_20": {"type": "integer"},
+                                "evidence_quality_0_to_10": {"type": "integer"},
+                            },
+                            "required": [
+                                "technical_fit_0_to_35",
+                                "company_risk_0_to_20",
+                                "role_quality_0_to_15",
+                                "spain_entity_compat_0_to_20",
+                                "evidence_quality_0_to_10",
+                            ],
+                        },
+                        "top_reasons": {"type": "array", "items": {"type": "string"}},
+                        "key_risks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "risk": {"type": "string"},
+                                    "severity": {"type": "string"},
+                                    "type": {"type": "string"},
+                                    "mitigation": {"type": "string"},
+                                },
+                                "required": ["risk", "severity", "type", "mitigation"],
+                            },
+                        },
+                        "spain_entity_risk": {
+                            "type": "object",
+                            "properties": {
+                                "status": {"type": "string"},
+                                "confidence_0_to_100": {"type": "integer"},
+                                "explanation": {"type": "string"},
+                                "recruiter_questions": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": [
+                                "status",
+                                "confidence_0_to_100",
+                                "explanation",
+                                "recruiter_questions",
+                            ],
+                        },
+                        "sources": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string"},
+                                    "url": {"type": "string"},
+                                    "evidence_grade": {"type": "string"},
+                                    "used_for": {"type": "string"},
+                                },
+                                "required": [
+                                    "label",
+                                    "url",
+                                    "evidence_grade",
+                                    "used_for",
+                                ],
+                            },
+                        },
+                        "report_markdown": {"type": "string"},
+                    },
+                    "required": [
+                        "verdict",
+                        "decision_score_0_to_100",
+                        "confidence_0_to_100",
+                        "summary",
+                        "raw_subscores",
+                        "top_reasons",
+                        "key_risks",
+                        "spain_entity_risk",
+                        "sources",
+                        "report_markdown",
+                    ],
+                }
+            },
+            "required": ["triage_result"],
+        }
+
     if section_id is not None and is_experience_section(section_id):
         return {
             "type": "object",

@@ -62,19 +62,63 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
 
 def _fake_response_for_section(section_id: str) -> str:
     if section_id == "triage_job_fit_and_risks":
-        content = "Proceed with this role."
-        reasoning = "Strong alignment. Go."
-    else:
-        content = f"Approved content for {section_id}"
-        reasoning = f"Reason for {section_id}"
+        return json.dumps(
+            {
+                "triage_result": {
+                    "verdict": "APPLY",
+                    "decision_score_0_to_100": 85,
+                    "confidence_0_to_100": 80,
+                    "summary": "Strong alignment for this role.",
+                    "raw_subscores": {
+                        "technical_fit_0_to_35": 31,
+                        "company_risk_0_to_20": 16,
+                        "role_quality_0_to_15": 12,
+                        "spain_entity_compat_0_to_20": 14,
+                        "evidence_quality_0_to_10": 8,
+                    },
+                    "top_reasons": [
+                        "Strong backend fit",
+                        "Good role scope",
+                        "Manageable risk profile",
+                    ],
+                    "key_risks": [
+                        {
+                            "risk": "Need recruiter confirmation on contract type.",
+                            "severity": "medium",
+                            "type": "uncertainty",
+                            "mitigation": "Ask direct hiring-entity questions early.",
+                        }
+                    ],
+                    "spain_entity_risk": {
+                        "status": "UNCLEAR",
+                        "confidence_0_to_100": 55,
+                        "explanation": "Public policy does not clarify B2B constraints.",
+                        "recruiter_questions": [
+                            "Can you hire via contractor agreement?",
+                            "Which legal entity signs the contract?",
+                            "Is payroll employment mandatory in Spain?",
+                        ],
+                    },
+                    "sources": [
+                        {
+                            "label": "Company careers",
+                            "url": "https://example.com/careers",
+                            "evidence_grade": "A",
+                            "used_for": "Hiring policy",
+                        }
+                    ],
+                    "report_markdown": "### Final Verdict\nProceed with this role.",
+                }
+            }
+        )
 
     envelope = {
         "variations": [
             {
                 "id": "A",
                 "score_0_to_100": 5,
-                "ai_reasoning": reasoning,
-                "content_for_template": content,
+                "ai_reasoning": f"Reason for {section_id}",
+                "content_for_template": f"Approved content for {section_id}",
             },
             {
                 "id": "B",
@@ -141,3 +185,71 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
 
     cover_letter = context.output_cover_letter_path.read_text(encoding="utf-8")
     assert "Approved content for doc_cover_letter" in cover_letter
+
+
+def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -> None:
+    run_dir = make_workspace_temp_dir("integration-mocked-triage-stop")
+    template_path = run_dir / "template.docx"
+    _make_template(template_path)
+    context = _build_runtime_context(run_dir, template_path)
+    state: GraphState = create_initial_state("integration-run-2")
+
+    async def fake_generate_with_gemini(
+        prompt: str, api_key: str, model: str, section_id: str | None = None
+    ) -> str:
+        assert api_key == "test-key"
+        assert model == "fake-model"
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        if resolved_section_id == "triage_job_fit_and_risks":
+            return json.dumps(
+                {
+                    "triage_result": {
+                        "verdict": "AVOID",
+                        "decision_score_0_to_100": 22,
+                        "confidence_0_to_100": 78,
+                        "summary": "High legal and role mismatch risk.",
+                        "raw_subscores": {
+                            "technical_fit_0_to_35": 15,
+                            "company_risk_0_to_20": 4,
+                            "role_quality_0_to_15": 5,
+                            "spain_entity_compat_0_to_20": 1,
+                            "evidence_quality_0_to_10": 7,
+                        },
+                        "top_reasons": ["Reason 1", "Reason 2", "Reason 3"],
+                        "key_risks": [
+                            {
+                                "risk": "Likely legal blocker for Spain setup.",
+                                "severity": "high",
+                                "type": "legal_blocker",
+                                "mitigation": "Do not proceed without explicit B2B path.",
+                            }
+                        ],
+                        "spain_entity_risk": {
+                            "status": "YES",
+                            "confidence_0_to_100": 85,
+                            "explanation": "Evidence points to local employment requirement.",
+                            "recruiter_questions": ["Q1", "Q2", "Q3"],
+                        },
+                        "sources": [
+                            {
+                                "label": "Policy",
+                                "url": "https://example.com/policy",
+                                "evidence_grade": "A",
+                                "used_for": "Employment constraints",
+                            }
+                        ],
+                        "report_markdown": "### Final Verdict\nAvoid.",
+                    }
+                }
+            )
+        return _fake_response_for_section(resolved_section_id)
+
+    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr("builtins.input", lambda _: "stop")
+
+    final_state = asyncio.run(_run_graph(state, context))
+
+    assert final_state.status == "completed"
+    assert final_state.current_node == "triage_stop"
+    assert not context.output_cv_path.exists()
+    assert not context.output_cover_letter_path.exists()

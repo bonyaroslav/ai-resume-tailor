@@ -23,13 +23,29 @@ EXPERIENCE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"text"',
 )
 
+TRIAGE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
+    '"triage_result"',
+    '"verdict"',
+    '"decision_score_0_to_100"',
+    '"confidence_0_to_100"',
+    '"summary"',
+    '"raw_subscores"',
+    '"top_reasons"',
+    '"key_risks"',
+    '"spain_entity_risk"',
+    '"sources"',
+    '"report_markdown"',
+)
+
 
 def test_active_prompts_keep_universal_json_envelope_contract() -> None:
     templates = discover_prompt_templates(Path("prompts"), Path("knowledge"))
 
     for section_id, template in templates.items():
         required_keys = DEFAULT_REQUIRED_JSON_SCHEMA_KEYS
-        if section_id.startswith("section_experience_"):
+        if section_id == "triage_job_fit_and_risks":
+            required_keys = TRIAGE_REQUIRED_JSON_SCHEMA_KEYS
+        elif section_id.startswith("section_experience_"):
             required_keys = EXPERIENCE_REQUIRED_JSON_SCHEMA_KEYS
 
         for key in required_keys:
@@ -39,3 +55,7 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
         assert (
             "score_0_to_5" not in template.body
         ), f"Prompt '{section_id}' contains legacy score_0_to_5 field."
+        if section_id == "triage_job_fit_and_risks":
+            assert (
+                '"variations"' not in template.body
+            ), "Prompt 'triage_job_fit_and_risks' must not use variations envelope."

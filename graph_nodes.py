@@ -8,14 +8,19 @@ from time import monotonic
 from pathlib import Path
 
 from checkpoint import save_checkpoint
-from console_ui import render_prompt, render_variations
+from console_ui import render_prompt, render_triage_result, render_variations
 from document_builder import (
     assemble_cv_document,
     preflight_template,
     write_cover_letter,
 )
-from graph_state import GraphState, SectionState, Variation, touch_state
-from json_parser import ResponseParseError, ResponseSchemaError, parse_response_envelope
+from graph_state import GraphState, SectionState, TriageResult, Variation, touch_state
+from json_parser import (
+    ResponseParseError,
+    ResponseSchemaError,
+    parse_response_envelope,
+    parse_triage_result,
+)
 from llm_client import QuotaExceededError, generate_with_gemini
 from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
@@ -75,11 +80,6 @@ def _best_variation(variations: list[Variation]) -> Variation:
         key=lambda variation: (-variation.score_0_to_100, variation.id),
     )
     return ranked[0]
-
-
-def _triage_is_no_go(variation: Variation) -> bool:
-    verdict_text = f"{variation.ai_reasoning}\n{variation.content_for_template}".lower()
-    return "no-go" in verdict_text or "avoid" in verdict_text
 
 
 def _normalize_triage_action(raw_action: str) -> str:
@@ -285,26 +285,117 @@ def _write_debug_response(
     (debug_dir / filename).write_text(raw_response, encoding="utf-8")
 
 
+async def _generate_triage_result(
+    section_state: SectionState, context: RuntimeContext, logger: logging.Logger
+) -> TriageResult:
+    template = context.prompt_templates[TRIAGE_SECTION_ID]
+    prompt = build_prompt_text(
+        template=template,
+        company_name=context.company_name,
+        job_description=context.job_description,
+        retry_note=section_state.user_note,
+    )
+    render_prompt(TRIAGE_SECTION_ID, prompt)
+
+    last_error: Exception | None = None
+    heartbeat_interval_seconds = _heartbeat_interval_seconds()
+    for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
+        await _wait_for_llm_pacing_slot(TRIAGE_SECTION_ID, logger)
+        logger.info(
+            "LLM request started section_id=%s attempt=%s heartbeat_s=%s",
+            TRIAGE_SECTION_ID,
+            attempt + 1,
+            heartbeat_interval_seconds,
+        )
+        request_started = monotonic()
+        request_task = asyncio.create_task(
+            generate_with_gemini(
+                prompt, context.api_key, context.model_name, TRIAGE_SECTION_ID
+            )
+        )
+        while True:
+            try:
+                raw_response = await asyncio.wait_for(
+                    asyncio.shield(request_task),
+                    timeout=heartbeat_interval_seconds,
+                )
+                break
+            except asyncio.TimeoutError:
+                elapsed_s = int(monotonic() - request_started)
+                logger.info(
+                    "LLM request in progress section_id=%s attempt=%s elapsed_s=%s",
+                    TRIAGE_SECTION_ID,
+                    attempt + 1,
+                    elapsed_s,
+                )
+            except QuotaExceededError as exc:
+                raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
+        logger.info(
+            "LLM request completed section_id=%s attempt=%s duration_ms=%s",
+            TRIAGE_SECTION_ID,
+            attempt + 1,
+            int((monotonic() - request_started) * 1000),
+        )
+
+        if context.debug_mode:
+            _write_debug_response(
+                context.run_dir, TRIAGE_SECTION_ID, attempt, raw_response
+            )
+        try:
+            return parse_triage_result(raw_response)
+        except ResponseParseError as exc:
+            log_failure(
+                logger,
+                category="parse_error",
+                node="triage",
+                section_id=TRIAGE_SECTION_ID,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+        except ResponseSchemaError as exc:
+            log_failure(
+                logger,
+                category="schema_error",
+                node="triage",
+                section_id=TRIAGE_SECTION_ID,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+
+    raise RuntimeError(
+        "LLM triage response failed parsing after allowed retries."
+    ) from (last_error)
+
+
 async def node_triage(
     state: GraphState, context: RuntimeContext, logger: logging.Logger
 ) -> GraphState:
     logger.info("Node triage started.")
     section_state = state.section_states[TRIAGE_SECTION_ID]
-    variations = await _generate_section_variations(
-        TRIAGE_SECTION_ID, section_state, context, logger
+    triage_result = await _generate_triage_result(section_state, context, logger)
+    render_triage_result(TRIAGE_SECTION_ID, triage_result)
+    selected = Variation(
+        id="TRIAGE",
+        score_0_to_100=triage_result.decision_score_0_to_100,
+        ai_reasoning=triage_result.summary,
+        content_for_template=triage_result.report_markdown,
     )
-
-    selected = _best_variation(variations)
     state.section_states[TRIAGE_SECTION_ID] = SectionState(
         status="approved",
-        variations=variations,
+        variations=[selected],
         selected_variation_id=selected.id,
         selected_content=selected.content_for_template,
         user_note=section_state.user_note,
         retry_count=section_state.retry_count,
     )
 
-    suggested_action = "stop" if _triage_is_no_go(selected) else "continue"
+    suggested_action = "stop" if triage_result.verdict == "AVOID" else "continue"
     user_action = suggested_action
     if context.auto_approve_triage:
         logger.info(

@@ -1,13 +1,50 @@
 {
   "triage_job_fit_and_risks": {
-    "variations": [
-      {
-        "id": "A",
-        "score_0_to_100": 94,
-        "ai_reasoning": "Offline emulation indicates good baseline alignment.",
-        "content_for_template": "### Location/Legal Risk\nSafe/Unknown for offline emulation.\n\n### Technical Fit\nGreen Flags:\n- Strong Python and API integration experience.\nRed Flags:\n- Validate exact domain depth for the target role.\n\n### VERDICT: APPLY (Go)"
-      }
-    ]
+    "triage_result": {
+      "verdict": "APPLY",
+      "decision_score_0_to_100": 94,
+      "confidence_0_to_100": 80,
+      "summary": "Offline emulation indicates good baseline alignment.",
+      "raw_subscores": {
+        "technical_fit_0_to_35": 32,
+        "company_risk_0_to_20": 16,
+        "role_quality_0_to_15": 13,
+        "spain_entity_compat_0_to_20": 15,
+        "evidence_quality_0_to_10": 8
+      },
+      "top_reasons": [
+        "Strong Python and API integration experience.",
+        "Role scope matches senior engineering profile.",
+        "No immediate legal blocker found in offline emulation."
+      ],
+      "key_risks": [
+        {
+          "risk": "Offline fixtures cannot verify current company policy changes.",
+          "severity": "medium",
+          "type": "uncertainty",
+          "mitigation": "Validate latest hiring and entity policy with recruiter."
+        }
+      ],
+      "spain_entity_risk": {
+        "status": "UNCLEAR",
+        "confidence_0_to_100": 55,
+        "explanation": "Offline mode has no live policy lookup.",
+        "recruiter_questions": [
+          "Can this role be offered as B2B contractor?",
+          "Which legal entity signs the contract for Spain-based candidates?",
+          "Is local payroll employment mandatory for this role?"
+        ]
+      },
+      "sources": [
+        {
+          "label": "Offline fixture",
+          "url": "https://example.com/offline-fixture",
+          "evidence_grade": "D",
+          "used_for": "Local development smoke test only"
+        }
+      ],
+      "report_markdown": "### Location/Legal Risk\nSafe/Unknown for offline emulation.\n\n### Technical Fit\nGreen Flags:\n- Strong Python and API integration experience.\nRed Flags:\n- Validate exact domain depth for the target role.\n\n### VERDICT: APPLY (Go)"
+    }
   },
   "section_professional_summary": {
     "variations": [

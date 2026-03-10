@@ -137,6 +137,17 @@ def test_response_json_schema_for_experience_sections_uses_bullets_shape() -> No
     assert "content_for_template" not in variation_schema["properties"]
 
 
+def test_response_json_schema_for_triage_uses_triage_result_shape() -> None:
+    schema = _response_json_schema("triage_job_fit_and_risks")
+    assert "additionalProperties" not in schema
+    assert schema["required"] == ["triage_result"]
+    triage_schema = schema["properties"]["triage_result"]
+    assert "variations" not in triage_schema["properties"]
+    assert "verdict" in triage_schema["properties"]
+    assert "report_markdown" in triage_schema["properties"]
+    assert "raw_subscores" in triage_schema["properties"]
+
+
 def test_generate_with_fallback_retries_without_schema() -> None:
     response = SimpleNamespace(
         parsed={

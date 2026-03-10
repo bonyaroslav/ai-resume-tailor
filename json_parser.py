@@ -7,7 +7,7 @@ from statistics import mean
 
 from pydantic import ValidationError
 
-from graph_state import ResponseEnvelope
+from graph_state import ResponseEnvelope, TriageResult
 from section_ids import is_experience_section
 
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
@@ -167,11 +167,7 @@ def _extract_first_json_object(text: str) -> str | None:
     return None
 
 
-def parse_response_envelope(
-    raw_text: str,
-    *,
-    section_id: str | None = None,
-) -> ResponseEnvelope:
+def _parse_json_payload(raw_text: str) -> object:
     cleaned = clean_llm_json(raw_text)
     raw_candidates = [cleaned]
     extracted = _extract_first_json_object(cleaned)
@@ -188,17 +184,24 @@ def parse_response_envelope(
 
     for candidate in candidates:
         try:
-            parsed = json.loads(candidate)
-            break
+            return json.loads(candidate)
         except JSONDecodeError as exc:
             last_error = exc
-    else:
-        line = last_error.lineno if last_error else "?"
-        column = last_error.colno if last_error else "?"
-        char = last_error.pos if last_error else "?"
-        raise ResponseParseError(
-            f"Malformed JSON in LLM response at line={line} column={column} char={char}."
-        ) from last_error
+
+    line = last_error.lineno if last_error else "?"
+    column = last_error.colno if last_error else "?"
+    char = last_error.pos if last_error else "?"
+    raise ResponseParseError(
+        f"Malformed JSON in LLM response at line={line} column={column} char={char}."
+    ) from last_error
+
+
+def parse_response_envelope(
+    raw_text: str,
+    *,
+    section_id: str | None = None,
+) -> ResponseEnvelope:
+    parsed = _parse_json_payload(raw_text)
 
     if (
         section_id is not None
@@ -213,4 +216,23 @@ def parse_response_envelope(
     except ValidationError as exc:
         raise ResponseSchemaError(
             "LLM response does not match expected envelope schema."
+        ) from exc
+
+
+def parse_triage_result(raw_text: str) -> TriageResult:
+    parsed = _parse_json_payload(raw_text)
+    if not isinstance(parsed, dict):
+        raise ResponseSchemaError("LLM triage response must be a JSON object.")
+
+    triage_result = parsed.get("triage_result")
+    if not isinstance(triage_result, dict):
+        raise ResponseSchemaError(
+            "LLM triage response must contain a triage_result object."
+        )
+
+    try:
+        return TriageResult.model_validate(triage_result)
+    except ValidationError as exc:
+        raise ResponseSchemaError(
+            "LLM triage response does not match expected triage_result schema."
         ) from exc
