@@ -124,6 +124,19 @@ def test_response_json_schema_omits_additional_properties() -> None:
     assert "$ref" not in str(schema)
 
 
+def test_response_json_schema_for_experience_sections_uses_bullets_shape() -> None:
+    schema = _response_json_schema("section_experience_1")
+    assert "additionalProperties" not in schema
+    assert schema["required"] == ["bullets"]
+    bullet_schema = schema["properties"]["bullets"]["items"]
+    assert bullet_schema["required"] == ["bullet_id", "variations"]
+    variation_schema = bullet_schema["properties"]["variations"]["items"]
+    assert "text" in variation_schema["properties"]
+    assert "artifact" in variation_schema["properties"]
+    assert "violations" not in variation_schema["properties"]
+    assert "content_for_template" not in variation_schema["properties"]
+
+
 def test_generate_with_fallback_retries_without_schema() -> None:
     response = SimpleNamespace(
         parsed={
@@ -140,12 +153,52 @@ def test_generate_with_fallback_retries_without_schema() -> None:
     models = FakeModels([_schema_error(), response])
     client = SimpleNamespace(models=models)
 
-    result = _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+    result = _generate_with_fallback(
+        client,
+        prompt="prompt",
+        model="gemini-test",
+    )
 
     assert '"id": "A"' in result
     assert len(models.calls) == 2
     assert models.calls[0]["config"] == _response_config(include_schema=True)
     assert models.calls[1]["config"] == _response_config(include_schema=False)
+
+
+def test_generate_with_fallback_uses_experience_schema_when_section_set() -> None:
+    response = SimpleNamespace(
+        parsed={
+            "bullets": [
+                {
+                    "bullet_id": 1,
+                    "variations": [
+                        {
+                            "id": "A",
+                            "score_0_to_100": 90,
+                            "ai_reasoning": "reason",
+                            "artifact": "dashboard",
+                            "text": "text",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    models = FakeModels([response])
+    client = SimpleNamespace(models=models)
+
+    _generate_with_fallback(
+        client,
+        prompt="prompt",
+        model="gemini-test",
+        section_id="section_experience_2",
+    )
+
+    assert len(models.calls) == 1
+    assert models.calls[0]["config"] == _response_config(
+        include_schema=True,
+        section_id="section_experience_2",
+    )
 
 
 def test_generate_with_fallback_raises_readable_error_when_fallback_fails() -> None:
@@ -195,7 +248,11 @@ def test_generate_with_fallback_retries_429_then_succeeds(
     monkeypatch.setenv("ART_LLM_BACKOFF_BASE_SECONDS", "0.1")
     monkeypatch.setattr("llm_client.time.sleep", lambda seconds: waits.append(seconds))
 
-    result = _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+    result = _generate_with_fallback(
+        client,
+        prompt="prompt",
+        model="gemini-test",
+    )
 
     assert json.loads(result)["variations"][0]["id"] == "A"
     assert len(models.calls) == 2

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from section_ids import is_experience_section
+
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
 DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
@@ -128,7 +130,45 @@ def _extract_text(response: Any) -> str:
     return "\n".join(parts).strip()
 
 
-def _response_json_schema() -> dict[str, Any]:
+def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
+    if section_id is not None and is_experience_section(section_id):
+        return {
+            "type": "object",
+            "properties": {
+                "bullets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "bullet_id": {"type": "integer"},
+                            "variations": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string"},
+                                        "score_0_to_100": {"type": "integer"},
+                                        "ai_reasoning": {"type": "string"},
+                                        "artifact": {"type": "string"},
+                                        "text": {"type": "string"},
+                                    },
+                                    "required": [
+                                        "id",
+                                        "score_0_to_100",
+                                        "ai_reasoning",
+                                        "artifact",
+                                        "text",
+                                    ],
+                                },
+                            },
+                        },
+                        "required": ["bullet_id", "variations"],
+                    },
+                }
+            },
+            "required": ["bullets"],
+        }
+
     return {
         "type": "object",
         "properties": {
@@ -155,10 +195,12 @@ def _response_json_schema() -> dict[str, Any]:
     }
 
 
-def _response_config(*, include_schema: bool) -> dict[str, Any]:
+def _response_config(
+    *, include_schema: bool, section_id: str | None = None
+) -> dict[str, Any]:
     config: dict[str, Any] = {"response_mime_type": "application/json"}
     if include_schema:
-        config["response_json_schema"] = _response_json_schema()
+        config["response_json_schema"] = _response_json_schema(section_id)
     return config
 
 
@@ -347,6 +389,7 @@ def _request_content_with_backoff(
     prompt: str,
     model: str,
     include_schema: bool,
+    section_id: str | None = None,
 ) -> Any:
     logger = logging.getLogger("ai_resume_tailor")
     max_attempts = _max_429_attempts()
@@ -361,6 +404,7 @@ def _request_content_with_backoff(
                 prompt=prompt,
                 model=model,
                 include_schema=include_schema,
+                section_id=section_id,
             )
         except Exception as exc:
             status_code = _status_code_from_exception(exc)
@@ -424,11 +468,12 @@ def _request_content(
     prompt: str,
     model: str,
     include_schema: bool,
+    section_id: str | None = None,
 ) -> Any:
     return client.models.generate_content(
         model=model,
         contents=prompt,
-        config=_response_config(include_schema=include_schema),
+        config=_response_config(include_schema=include_schema, section_id=section_id),
     )
 
 
@@ -448,13 +493,20 @@ def _response_to_text(response: Any) -> str:
     return text
 
 
-def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
+def _generate_with_fallback(
+    client: Any,
+    *,
+    prompt: str,
+    model: str,
+    section_id: str | None = None,
+) -> str:
     try:
         response = _request_content_with_backoff(
             client,
             prompt=prompt,
             model=model,
             include_schema=True,
+            section_id=section_id,
         )
     except Exception as exc:
         if isinstance(exc, QuotaExceededError):
@@ -469,6 +521,7 @@ def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
                 prompt=prompt,
                 model=model,
                 include_schema=False,
+                section_id=section_id,
             )
         except Exception as fallback_exc:
             if isinstance(fallback_exc, QuotaExceededError):
@@ -480,14 +533,24 @@ def _generate_with_fallback(client: Any, *, prompt: str, model: str) -> str:
     return _response_to_text(response)
 
 
-def _generate_sync(prompt: str, api_key: str, model: str) -> str:
+def _generate_sync(
+    prompt: str,
+    api_key: str,
+    model: str,
+    section_id: str | None = None,
+) -> str:
     try:
         from google import genai
     except ImportError as exc:
         raise LlmClientError("google-genai is not installed.") from exc
 
     client = genai.Client(api_key=api_key)
-    return _generate_with_fallback(client, prompt=prompt, model=model)
+    return _generate_with_fallback(
+        client,
+        prompt=prompt,
+        model=model,
+        section_id=section_id,
+    )
 
 
 async def generate_with_gemini(
@@ -495,4 +558,4 @@ async def generate_with_gemini(
 ) -> str:
     if _offline_mode_enabled():
         return _generate_offline(section_id)
-    return await asyncio.to_thread(_generate_sync, prompt, api_key, model)
+    return await asyncio.to_thread(_generate_sync, prompt, api_key, model, section_id)

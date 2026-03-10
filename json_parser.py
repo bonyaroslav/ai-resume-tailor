@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import re
 from json import JSONDecodeError
+from statistics import mean
 
 from pydantic import ValidationError
 
 from graph_state import ResponseEnvelope
+from section_ids import is_experience_section
 
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
 
@@ -17,6 +19,98 @@ class ResponseParseError(ValueError):
 
 class ResponseSchemaError(ValueError):
     pass
+
+
+def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, object]:
+    bullets = parsed.get("bullets")
+    if not isinstance(bullets, list) or not bullets:
+        raise ResponseSchemaError(
+            "Experience payload must include a non-empty bullets array."
+        )
+
+    bullet_variation_ids: list[list[str]] = []
+    per_variation_text: dict[str, list[str]] = {}
+    per_variation_scores: dict[str, list[int]] = {}
+    per_variation_reasoning: dict[str, list[str]] = {}
+
+    for bullet_index, bullet in enumerate(bullets, start=1):
+        if not isinstance(bullet, dict):
+            raise ResponseSchemaError(
+                f"Experience bullet at index {bullet_index} must be an object."
+            )
+        variations = bullet.get("variations")
+        if not isinstance(variations, list) or not variations:
+            raise ResponseSchemaError(
+                f"Experience bullet at index {bullet_index} must contain non-empty variations."
+            )
+
+        variation_ids_for_bullet: list[str] = []
+        for variation_index, variation in enumerate(variations, start=1):
+            if not isinstance(variation, dict):
+                raise ResponseSchemaError(
+                    "Experience variation must be an object "
+                    f"(bullet={bullet_index}, variation={variation_index})."
+                )
+
+            variation_id = variation.get("id")
+            score = variation.get("score_0_to_100")
+            ai_reasoning = variation.get("ai_reasoning")
+            text = variation.get("text")
+            if not isinstance(variation_id, str) or not variation_id.strip():
+                raise ResponseSchemaError(
+                    "Experience variation.id must be a non-empty string "
+                    f"(bullet={bullet_index}, variation={variation_index})."
+                )
+            if not isinstance(score, int) or score < 0 or score > 100:
+                raise ResponseSchemaError(
+                    "Experience variation.score_0_to_100 must be an integer between 0 and 100 "
+                    f"(bullet={bullet_index}, variation={variation_index})."
+                )
+            if not isinstance(ai_reasoning, str):
+                raise ResponseSchemaError(
+                    "Experience variation.ai_reasoning must be a string "
+                    f"(bullet={bullet_index}, variation={variation_index})."
+                )
+            if not isinstance(text, str) or not text.strip():
+                raise ResponseSchemaError(
+                    "Experience variation.text must be a non-empty string "
+                    f"(bullet={bullet_index}, variation={variation_index})."
+                )
+
+            normalized_id = variation_id.strip()
+            variation_ids_for_bullet.append(normalized_id)
+            per_variation_text.setdefault(normalized_id, []).append(text.strip())
+            per_variation_scores.setdefault(normalized_id, []).append(score)
+            per_variation_reasoning.setdefault(normalized_id, []).append(
+                ai_reasoning.strip()
+            )
+
+        bullet_variation_ids.append(variation_ids_for_bullet)
+
+    expected_ids = bullet_variation_ids[0]
+    for variation_ids in bullet_variation_ids[1:]:
+        if variation_ids != expected_ids:
+            raise ResponseSchemaError(
+                "Experience bullets must contain the same ordered variation ids."
+            )
+
+    normalized_variations: list[dict[str, object]] = []
+    for variation_id in expected_ids:
+        normalized_variations.append(
+            {
+                "id": variation_id,
+                "score_0_to_100": int(round(mean(per_variation_scores[variation_id]))),
+                "ai_reasoning": " ".join(
+                    reason for reason in per_variation_reasoning[variation_id] if reason
+                ).strip()
+                or "Aggregated bullet-level rationale.",
+                "content_for_template": "\n".join(
+                    per_variation_text[variation_id]
+                ).strip(),
+            }
+        )
+
+    return {"variations": normalized_variations}
 
 
 def clean_llm_json(raw_text: str) -> str:
@@ -73,7 +167,11 @@ def _extract_first_json_object(text: str) -> str | None:
     return None
 
 
-def parse_response_envelope(raw_text: str) -> ResponseEnvelope:
+def parse_response_envelope(
+    raw_text: str,
+    *,
+    section_id: str | None = None,
+) -> ResponseEnvelope:
     cleaned = clean_llm_json(raw_text)
     raw_candidates = [cleaned]
     extracted = _extract_first_json_object(cleaned)
@@ -101,6 +199,14 @@ def parse_response_envelope(raw_text: str) -> ResponseEnvelope:
         raise ResponseParseError(
             f"Malformed JSON in LLM response at line={line} column={column} char={char}."
         ) from last_error
+
+    if (
+        section_id is not None
+        and is_experience_section(section_id)
+        and isinstance(parsed, dict)
+        and "bullets" in parsed
+    ):
+        parsed = _normalize_experience_envelope(parsed)
 
     try:
         return ResponseEnvelope.model_validate(parsed)

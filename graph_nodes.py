@@ -222,7 +222,7 @@ async def _generate_section_variations(
         if context.debug_mode:
             _write_debug_response(context.run_dir, section_id, attempt, raw_response)
         try:
-            envelope = parse_response_envelope(raw_response)
+            envelope = parse_response_envelope(raw_response, section_id=section_id)
         except ResponseParseError as exc:
             log_failure(
                 logger,
