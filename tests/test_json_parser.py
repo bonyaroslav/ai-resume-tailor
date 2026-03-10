@@ -53,6 +53,16 @@ def test_parse_response_envelope_rejects_schema_mismatch() -> None:
         parse_response_envelope('{"variations":[{"id":"A"}]}')
 
 
+def test_parse_response_envelope_rejects_legacy_score_key() -> None:
+    with pytest.raises(ResponseSchemaError):
+        parse_response_envelope(
+            (
+                '{"variations":[{"id":"A","score_0_to_5":5,'
+                '"ai_reasoning":"reason","content_for_template":"content"}]}'
+            )
+        )
+
+
 def test_parse_response_envelope_accepts_wrapped_json_with_extra_text() -> None:
     raw = """
 Here is the result:
