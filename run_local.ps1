@@ -33,6 +33,7 @@ $jdPath = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.JobDe
 $companyName = [string]$RunnerConfig.CompanyName
 $tierName = [string]$RunnerConfig.TierName
 $roleName = [string]$RunnerConfig.RoleName
+$defaultRoleName = "role_senior_dotnet_engineer"
 $manualModelName = [string]$RunnerConfig.ModelName
 $templatePath = [string]$RunnerConfig.TemplatePath
 $debugMode = [bool]$RunnerConfig.Debug
@@ -61,7 +62,8 @@ if ([string]::IsNullOrWhiteSpace($tierName)) {
     throw "TierName must not be empty in runner.config.ps1"
 }
 if ([string]::IsNullOrWhiteSpace($roleName)) {
-    throw "RoleName must not be empty in runner.config.ps1"
+    Write-Host "RoleName is empty in runner.config.ps1; defaulting to $defaultRoleName"
+    $roleName = $defaultRoleName
 }
 if (-not $tierProfiles) {
     throw "TierProfiles must be defined in runner.config.ps1"
