@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from prompt_loader import PromptValidationError, discover_prompt_templates
+from prompt_loader import (
+    PromptTemplate,
+    PromptValidationError,
+    build_prompt_text,
+    discover_prompt_templates,
+)
 from tests.test_support import make_workspace_temp_dir
 from workflow_definition import WORKFLOW_SECTION_IDS
 
@@ -120,3 +125,24 @@ def test_discover_prompt_templates_rejects_example_only_files() -> None:
     message = str(exc_info.value)
     assert "without '.example' suffix" in message
     assert "Create your own prompt files" in message
+
+
+def test_build_prompt_text_always_includes_job_description_runtime_input() -> None:
+    template = PromptTemplate(
+        section_id="section_professional_summary",
+        path=Path("prompts/section_professional_summary.md"),
+        body="Write three summary options.",
+        knowledge_files=[],
+    )
+    job_description = "Need Python, AWS, and strong ownership.\nMust mentor juniors."
+
+    prompt = build_prompt_text(
+        template=template,
+        company_name="Acme",
+        job_description=job_description,
+    )
+
+    assert "## Runtime Input" in prompt
+    assert "Company Name: Acme" in prompt
+    assert "Job Description:\nNeed Python, AWS, and strong ownership." in prompt
+    assert "Must mentor juniors." in prompt
