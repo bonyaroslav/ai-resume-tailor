@@ -210,18 +210,18 @@ __marimo__/
 # --- AI Resume Tailor Privacy Guardrails ---
 
 # 1. Ignore all personal knowledge and prompts
-knowledge/*.md
-prompts/*.md
+knowledge/**/*.md
+prompts/**/*.md
 
-# 2. Knowledge allowlist (single source of truth for tracked knowledge/*.md)
-!knowledge/knowledge-file.example.md
-!knowledge/constraints_legal_and_location_blockers.md
-!knowledge/rules_bullet_points_formatting.md
-!knowledge/rules_cover_letter_playbook.md
-!knowledge/rules_professional_summary.md
+# 2. Knowledge allowlist (single source of truth for tracked knowledge examples/rules)
+!knowledge/**/knowledge-file.example.md
+!knowledge/**/constraints_legal_and_location_blockers.md
+!knowledge/**/rules_bullet_points_formatting.md
+!knowledge/**/rules_cover_letter_playbook.md
+!knowledge/**/rules_professional_summary.md
 
 # 3. Prompt allowlist: only generic example templates are tracked
-!prompts/*.example.md
+!prompts/**/*.example.md
 
 # 4. Ignore all local run outputs (which contain personal data)
 runs/

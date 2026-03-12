@@ -22,14 +22,25 @@ from job_description_loader import read_job_description
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
-from settings import resolve_gemini_model_name
+from settings import (
+    DEFAULT_ROLE_NAME,
+    ROLE_NAME_ENV,
+    default_template_path_for_role,
+    role_knowledge_dir,
+    role_prompts_dir,
+    resolve_gemini_model_name,
+    resolve_role_name,
+)
 from workflow_definition import (
     GENERATION_SECTION_IDS,
     TEMPLATE_SECTION_IDS,
     TRIAGE_SECTION_ID,
 )
 
-DEFAULT_TEMPLATE_PATH = "knowledge/Default Template - Senior Software Engineer.docx"
+LEGACY_DEFAULT_TEMPLATE_PATH = Path(
+    "knowledge/Default Template - Senior Software Engineer.docx"
+)
+DEFAULT_TEMPLATE_PATH = str(default_template_path_for_role(DEFAULT_ROLE_NAME))
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
 AUTO_APPROVE_TRIAGE_ENV = "ART_AUTO_APPROVE_TRIAGE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
@@ -42,10 +53,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Start a new run")
     run_parser.add_argument("--jd-path", required=True, type=Path)
     run_parser.add_argument("--company", required=True)
-    run_parser.add_argument(
-        "--template-path", type=Path, default=Path(DEFAULT_TEMPLATE_PATH)
-    )
+    run_parser.add_argument("--template-path", type=Path, default=None)
     run_parser.add_argument("--model", default=None)
+    run_parser.add_argument("--role", default=None)
     run_parser.add_argument("--debug", action="store_true")
 
     resume_parser = subparsers.add_parser("resume", help="Resume from checkpoint")
@@ -53,6 +63,7 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_group.add_argument("--run-path", type=Path)
     resume_group.add_argument("--checkpoint-path", type=Path)
     resume_parser.add_argument("--model", default=None)
+    resume_parser.add_argument("--role", default=None)
 
     status_parser = subparsers.add_parser(
         "status", help="Show status summary for a run"
@@ -70,6 +81,7 @@ def _build_parser() -> argparse.ArgumentParser:
     regenerate_parser.add_argument("--sections", required=True)
     regenerate_parser.add_argument("--note", required=True)
     regenerate_parser.add_argument("--model", default=None)
+    regenerate_parser.add_argument("--role", default=None)
 
     rebuild_parser = subparsers.add_parser(
         "rebuild-output", help="Rebuild CV and cover letter from approved content"
@@ -77,6 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
     rebuild_group = rebuild_parser.add_mutually_exclusive_group(required=True)
     rebuild_group.add_argument("--run-path", type=Path)
     rebuild_group.add_argument("--checkpoint-path", type=Path)
+    rebuild_parser.add_argument("--role", default=None)
 
     return parser
 
@@ -267,11 +280,50 @@ def _load_metadata_or_default(
         metadata = {
             "run_id": run_dir.name,
             "company_name": args.company,
-            "template_path": str(args.template_path),
             "model_name": resolve_gemini_model_name(args.model),
             "debug_mode": str(bool(args.debug)).lower(),
         }
     return metadata
+
+
+def _resolve_role_name_for_command(
+    explicit_role: str | None,
+    *,
+    metadata_role: str | None,
+) -> str:
+    if (
+        explicit_role
+        and metadata_role
+        and explicit_role.strip()
+        and explicit_role.strip() != metadata_role.strip()
+    ):
+        raise SystemExit(
+            "Role mismatch for this run. "
+            f"Saved role is '{metadata_role.strip()}', "
+            f"but '--role {explicit_role.strip()}' was requested."
+        )
+    return resolve_role_name(explicit_role, metadata_role=metadata_role)
+
+
+def _resolve_template_path(
+    explicit_template: Path | None,
+    *,
+    metadata_template: str | None,
+    role_name: str,
+) -> Path:
+    if explicit_template is not None:
+        return explicit_template
+    if metadata_template:
+        candidate = Path(metadata_template)
+        role_default = default_template_path_for_role(role_name)
+        if (
+            candidate == LEGACY_DEFAULT_TEMPLATE_PATH
+            and not candidate.exists()
+            and role_default.exists()
+        ):
+            return role_default
+        return candidate
+    return default_template_path_for_role(role_name)
 
 
 def _resolve_run_checkpoint_pair(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -540,10 +592,11 @@ def _prepare_runtime_context(
     job_description: str,
     template_path: Path,
     model_name: str,
+    role_name: str,
     debug_mode: bool,
 ) -> RuntimeContext:
-    prompts_dir = Path("prompts")
-    knowledge_dir = Path("knowledge")
+    prompts_dir = role_prompts_dir(role_name)
+    knowledge_dir = role_knowledge_dir(role_name)
     prompt_templates = discover_prompt_templates(prompts_dir, knowledge_dir)
     preflight_template(template_path, TEMPLATE_SECTION_IDS)
 
@@ -584,6 +637,11 @@ async def _handle_run(args: argparse.Namespace) -> None:
         return
 
     metadata = _load_metadata_or_default(run_dir, args)
+    role_name = _resolve_role_name_for_command(
+        args.role,
+        metadata_role=metadata.get("role_name"),
+    )
+    os.environ[ROLE_NAME_ENV] = role_name
     jd_path = run_dir / "job_description.txt"
     if jd_path.exists():
         jd_text = jd_path.read_text(encoding="utf-8")
@@ -595,7 +653,11 @@ async def _handle_run(args: argparse.Namespace) -> None:
         args.model,
         metadata_model=metadata.get("model_name"),
     )
-    template_path = Path(metadata.get("template_path", str(args.template_path)))
+    template_path = _resolve_template_path(
+        args.template_path,
+        metadata_template=metadata.get("template_path"),
+        role_name=role_name,
+    )
     debug_mode = metadata.get("debug_mode", "false") == "true"
     if args.debug:
         debug_mode = True
@@ -606,6 +668,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
         job_description=jd_text,
         template_path=template_path,
         model_name=model_name,
+        role_name=role_name,
         debug_mode=debug_mode,
     )
 
@@ -616,11 +679,13 @@ async def _handle_run(args: argparse.Namespace) -> None:
             "company_name": metadata.get("company_name", args.company),
             "template_path": str(template_path),
             "model_name": model_name,
+            "role_name": role_name,
             "debug_mode": str(debug_mode).lower(),
         },
     )
     print(f"Using run folder: {run_dir}")
     print(f"Model: {model_name}")
+    print(f"Role: {role_name}")
     print(f"JD preview: {_job_description_preview(jd_text, max_lines=3)}")
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
@@ -632,6 +697,11 @@ async def _handle_resume(args: argparse.Namespace) -> None:
 
     state = load_checkpoint(checkpoint_path)
     metadata = load_run_metadata(run_dir)
+    role_name = _resolve_role_name_for_command(
+        args.role,
+        metadata_role=metadata.get("role_name"),
+    )
+    os.environ[ROLE_NAME_ENV] = role_name
     jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
     _print_status_summary(state, run_dir)
     _print_next_steps(state, run_dir)
@@ -644,8 +714,13 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         run_dir=run_dir,
         company_name=metadata["company_name"],
         job_description=jd_text,
-        template_path=Path(metadata["template_path"]),
+        template_path=_resolve_template_path(
+            explicit_template=None,
+            metadata_template=metadata.get("template_path"),
+            role_name=role_name,
+        ),
         model_name=model_name,
+        role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
     final_state = await _run_graph(state, context)
@@ -668,6 +743,11 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     metadata = load_run_metadata(run_dir)
+    role_name = _resolve_role_name_for_command(
+        args.role,
+        metadata_role=metadata.get("role_name"),
+    )
+    os.environ[ROLE_NAME_ENV] = role_name
     jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
     try:
         sections = _parse_requested_sections(args.sections)
@@ -688,8 +768,13 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         run_dir=run_dir,
         company_name=metadata["company_name"],
         job_description=jd_text,
-        template_path=Path(metadata["template_path"]),
+        template_path=_resolve_template_path(
+            explicit_template=None,
+            metadata_template=metadata.get("template_path"),
+            role_name=role_name,
+        ),
         model_name=model_name,
+        role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
     final_state = await _run_graph(state, context)
@@ -709,16 +794,26 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
     save_checkpoint(checkpoint_path, state)
 
     metadata = load_run_metadata(run_dir)
+    role_name = _resolve_role_name_for_command(
+        args.role,
+        metadata_role=metadata.get("role_name"),
+    )
+    os.environ[ROLE_NAME_ENV] = role_name
     jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
         job_description=jd_text,
-        template_path=Path(metadata["template_path"]),
+        template_path=_resolve_template_path(
+            explicit_template=None,
+            metadata_template=metadata.get("template_path"),
+            role_name=role_name,
+        ),
         model_name=resolve_gemini_model_name(
             explicit_model=None,
             metadata_model=metadata.get("model_name"),
         ),
+        role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
     final_state = await _run_graph(state, context)

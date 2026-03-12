@@ -32,6 +32,7 @@ $apiKeyFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.A
 $jdPath = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.JobDescriptionPath
 $companyName = [string]$RunnerConfig.CompanyName
 $tierName = [string]$RunnerConfig.TierName
+$roleName = [string]$RunnerConfig.RoleName
 $manualModelName = [string]$RunnerConfig.ModelName
 $templatePath = [string]$RunnerConfig.TemplatePath
 $debugMode = [bool]$RunnerConfig.Debug
@@ -58,6 +59,9 @@ if ([string]::IsNullOrWhiteSpace($companyName)) {
 }
 if ([string]::IsNullOrWhiteSpace($tierName)) {
     throw "TierName must not be empty in runner.config.ps1"
+}
+if ([string]::IsNullOrWhiteSpace($roleName)) {
+    throw "RoleName must not be empty in runner.config.ps1"
 }
 if (-not $tierProfiles) {
     throw "TierProfiles must be defined in runner.config.ps1"
@@ -101,6 +105,7 @@ $env:ART_AUTO_APPROVE_TRIAGE = "0"
 
 Write-Host "      TierName=$tierName"
 Write-Host "      ModelName=$modelName"
+Write-Host "      RoleName=$roleName"
 Write-Host "      ART_GENERATION_MODE=$env:ART_GENERATION_MODE"
 Write-Host "      ART_LLM_MIN_INTERVAL_SECONDS=$env:ART_LLM_MIN_INTERVAL_SECONDS"
 Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
@@ -117,7 +122,7 @@ else {
 }
 
 Write-Host "[5/5] Running AI Resume Tailor"
-$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName)
+$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName, "--role", $roleName)
 if (-not [string]::IsNullOrWhiteSpace($templatePath)) {
     $resolvedTemplate = Resolve-FromRoot -BasePath $projectRoot -InputPath $templatePath
     $runArgs += @("--template-path", $resolvedTemplate)

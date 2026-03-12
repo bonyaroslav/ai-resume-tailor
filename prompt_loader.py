@@ -110,6 +110,7 @@ def discover_prompt_templates(
     ]
     if missing_sections:
         missing = ", ".join(missing_sections)
+        prompts_path_display = str(prompts_dir).replace("\\", "/")
         example_only_missing = [
             section_id
             for section_id in missing_sections
@@ -120,13 +121,13 @@ def discover_prompt_templates(
             raise PromptValidationError(
                 "Missing prompt files without '.example' suffix for sections: "
                 f"{missing}. Found only example files for: {example_only}. "
-                "Create your own prompt files in 'prompts/' with '.md' names "
-                "(without '.example')."
+                f"Create your own prompt files in '{prompts_path_display}/' with "
+                "'.md' names (without '.example')."
             )
         raise PromptValidationError(
             "Missing prompt files for sections: "
-            f"{missing}. Create prompt files in 'prompts/' with '.md' names "
-            "(without '.example')."
+            f"{missing}. Create prompt files in '{prompts_path_display}/' "
+            "with '.md' names (without '.example')."
         )
 
     templates: dict[str, PromptTemplate] = {}

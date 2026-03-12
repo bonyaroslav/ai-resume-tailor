@@ -10,12 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from settings import default_offline_fixtures_path_for_role, resolve_role_name
 from section_ids import is_experience_section
 from workflow_definition import TRIAGE_SECTION_ID
 
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
-DEFAULT_OFFLINE_FIXTURES_PATH = Path("knowledge/offline_responses.example.json")
 LLM_MAX_429_ATTEMPTS_ENV = "ART_LLM_MAX_429_ATTEMPTS"
 LLM_BACKOFF_BASE_SECONDS_ENV = "ART_LLM_BACKOFF_BASE_SECONDS"
 LLM_MAX_TOTAL_WAIT_SECONDS_ENV = "ART_LLM_MAX_TOTAL_WAIT_SECONDS"
@@ -77,7 +77,7 @@ def _offline_mode_enabled() -> bool:
 
 def _load_offline_fixtures() -> dict[str, dict[str, Any]]:
     configured = os.getenv(OFFLINE_FIXTURES_PATH_ENV, "").strip()
-    path = Path(configured) if configured else DEFAULT_OFFLINE_FIXTURES_PATH
+    path = Path(configured) if configured else _default_offline_fixtures_path()
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -93,6 +93,11 @@ def _load_offline_fixtures() -> dict[str, dict[str, Any]]:
             "Offline fixture JSON must be an object keyed by section_id."
         )
     return data
+
+
+def _default_offline_fixtures_path() -> Path:
+    role_name = resolve_role_name(explicit_role=None)
+    return default_offline_fixtures_path_for_role(role_name)
 
 
 def _generate_offline(section_id: str | None) -> str:

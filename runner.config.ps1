@@ -8,6 +8,7 @@ $RunnerConfig = @{
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Mindera.txt"
     CompanyName = "Mindera"
     TierName = "freetier"
+    RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.
     # Leave empty to use TierProfiles.<TierName>.ModelName.

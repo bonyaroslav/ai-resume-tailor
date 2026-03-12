@@ -28,6 +28,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
         company="offline-smoke",
         template_path=Path(main.DEFAULT_TEMPLATE_PATH),
         model=DEFAULT_GEMINI_MODEL,
+        role=None,
         debug=False,
     )
 

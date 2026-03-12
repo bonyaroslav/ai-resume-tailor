@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from prompt_loader import discover_prompt_templates
+from settings import DEFAULT_ROLE_NAME, role_knowledge_dir, role_prompts_dir
 
 DEFAULT_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"variations"',
@@ -39,7 +38,10 @@ TRIAGE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
 
 
 def test_active_prompts_keep_universal_json_envelope_contract() -> None:
-    templates = discover_prompt_templates(Path("prompts"), Path("knowledge"))
+    templates = discover_prompt_templates(
+        role_prompts_dir(DEFAULT_ROLE_NAME),
+        role_knowledge_dir(DEFAULT_ROLE_NAME),
+    )
 
     for section_id, template in templates.items():
         required_keys = DEFAULT_REQUIRED_JSON_SCHEMA_KEYS
