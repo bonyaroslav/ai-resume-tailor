@@ -154,8 +154,45 @@ def test_parse_response_envelope_normalizes_experience_bullets_schema(
     assert envelope.variations[0].score_0_to_100 == 85
     assert (
         envelope.variations[0].content_for_template
-        == "Built observability dashboards for low-latency feeds.\n"
-        "Automated release checks and deployment gates."
+        == "- Built observability dashboards for low-latency feeds.\n"
+        "- Automated release checks and deployment gates."
+    )
+
+
+def test_parse_response_envelope_normalizes_existing_bullet_prefixes() -> None:
+    raw = """
+{
+  "bullets": [
+    {
+      "bullet_id": 1,
+      "variations": [
+        {
+          "id": "A",
+          "score_0_to_100": 90,
+          "ai_reasoning": "ok",
+          "artifact": "service",
+          "text": "- Improved service reliability."
+        }
+      ]
+    },
+    {
+      "bullet_id": 2,
+      "variations": [
+        {
+          "id": "A",
+          "score_0_to_100": 92,
+          "ai_reasoning": "ok",
+          "artifact": "release",
+          "text": "2. Hardened release automation."
+        }
+      ]
+    }
+  ]
+}
+"""
+    envelope = parse_response_envelope(raw, section_id="section_experience_1")
+    assert envelope.variations[0].content_for_template == (
+        "- Improved service reliability.\n" "- Hardened release automation."
     )
 
 

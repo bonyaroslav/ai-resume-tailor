@@ -1,189 +1,276 @@
-**Status options:**
-Choose one per item, depending on your situation:
-
-* **Strong / Recent**
-* **Working knowledge**
-* **Some exposure**
-* **Learning / Refreshing**
-* **Not a focus right now**
-
-**Notes guidance:**
-Keep notes short. Add proof points, examples, links, repos, certifications, or project references later if needed.
+Legend:
+- Status options: primary | secondary | familiar | upskilling | transferable | optional
+- Use short Notes with facts, examples, tools, systems, or outcomes.
+- Replace placeholders like XYZ, Tool A, Company A, Platform A, etc.
 
 ---
 
-### 1) Core Backend (.NET/C# + APIs) — high priority
+## 1) Core Backend (.NET/C# + APIs) — highest priority
 
-* C# + modern .NET — Status: [choose]  Notes:
-* ASP.NET Core / Web API / REST contracts — Status: [choose]  Notes:
-* Async/await, background processing, workers — Status: [choose]  Notes:
-* Microservices fundamentals (service boundaries, deployment, communication) — Status: [choose]  Notes:
-* Resilience patterns (timeouts, retries, idempotency, circuit breakers) — Status: [choose]  Notes:
-* Authentication / Authorization (JWT, OAuth2, OIDC) — Status: [choose]  Notes:
-* Python — Status: [choose]  Notes:
+- Skill: C# + modern .NET (Core / 6+)
+  Status: [primary | secondary | familiar]
+  Notes:
 
----
+- Skill: ASP.NET Core + ASP.NET Core Web API + REST contracts
+  Status: [primary | secondary | familiar]
+  Notes:
 
-### 2) Data & Storage (SQL-first) — high priority
+- Skill: Async/await, background jobs/workers
+  Status: [primary | secondary | familiar]
+  Notes:
 
-* SQL databases — Status: [choose]  Notes:
-* MySQL / MariaDB — Status: [choose]  Notes:
-* PostgreSQL — Status: [choose]  Notes:
-* Schema design + migrations — Status: [choose]  Notes:
-* Query optimization (indexes, execution plans, transactions, locking) — Status: [choose]  Notes:
-* ORMs / data access:
+- Skill: Microservices fundamentals (service boundaries, deployability)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-  * Dapper — Status: [choose]  Notes:
-  * Entity Framework Core — Status: [choose]  Notes:
-* Caching strategies (in-memory + distributed) — Status: [choose]  Notes:
-* NoSQL databases:
+- Skill: Resilience patterns (timeouts/retries/idempotency)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-  * DynamoDB / similar — Status: [choose]  Notes:
-  * Redis — Status: [choose]  Notes:
-* GraphQL — Status: [choose]  Notes:
+- Skill: AuthN/AuthZ (JWT, OAuth2/OIDC)
+  Status: [secondary | familiar | upskilling]
+  Notes:
 
----
-
-### 3) Cloud + CI/CD + Delivery — high priority
-
-* AWS / cloud platforms — Status: [choose]  Notes:
-* CI/CD pipelines — Status: [choose]  Notes:
-* Infrastructure as Code:
-
-  * CloudFormation / similar — Status: [choose]  Notes:
-  * Terraform / Bicep / similar — Status: [choose]  Notes:
-* Release practices (feature flags, canary rollout, rollback, safe deployment) — Status: [choose]  Notes:
-* Azure / transferable cloud knowledge — Status: [choose]  Notes:
+- Skill: Python
+  Status: [secondary | familiar | upskilling]
+  Notes: Has some experience / scripting / automation / backend support.
 
 ---
 
-### 4) Messaging / Event-Driven Systems — high priority
+## 2) Data & Storage (SQL-first) — highest priority
 
-* Queue / pub-sub systems (e.g. SQS, SNS, RabbitMQ, Service Bus) — Status: [choose]  Notes:
-* Kafka / streaming platforms — Status: [choose]  Notes:
-* Operational messaging patterns (DLQ, retries, poison messages, ordering, idempotency) — Status: [choose]  Notes:
+- Skill: MS SQL Server / SQL Server
+  Status: [primary | secondary | familiar]
+  Notes: Add 1–2 concrete examples if available.
 
----
+- Skill: MySQL
+  Status: [secondary | familiar | optional]
+  Notes:
 
-### 5) Observability + Reliability — high priority
+- Skill: PostgreSQL
+  Status: [secondary | familiar | optional]
+  Notes:
 
-* Structured logging + correlation IDs — Status: [choose]  Notes:
-* Dashboards / monitoring / alerts — Status: [choose]  Notes:
-* Incident response / support / on-call participation — Status: [choose]  Notes:
-* Reliability thinking (latency, error rate, availability, service health) — Status: [choose]  Notes:
-* Tracing / diagnostics (OpenTelemetry, App Insights, similar) — Status: [choose]  Notes:
+- Skill: Schema design + migrations
+  Status: [primary | secondary | familiar]
+  Notes:
 
----
+- Skill: Query optimisation (indexes, plans, transactions/locking)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-### 6) Testing & Code Quality — high priority
+- Skill: Dapper
+  Status: [primary | secondary | familiar]
+  Notes:
 
-* Unit testing (xUnit / NUnit / MSTest / similar) — Status: [choose]  Notes:
-* Integration testing (DB, queues, external dependencies) — Status: [choose]  Notes:
-* Test strategy (test pyramid, smoke, regression) — Status: [choose]  Notes:
-* Static analysis / linters / quality gates — Status: [choose]  Notes:
+- Skill: Entity Framework Core
+  Status: [primary | secondary | familiar]
+  Notes:
 
----
+- Skill: Caching strategies (in-memory + distributed)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-### 7) Containers & Orchestration — useful differentiator
+- Skill: DynamoDB
+  Status: [secondary | familiar | transferable]
+  Notes:
 
-* Docker / Docker Compose — Status: [choose]  Notes:
-* Kubernetes — Status: [choose]  Notes:
-* Container CI workflows (build / push / scan) — Status: [choose]  Notes:
+- Skill: Redis
+  Status: [secondary | familiar | optional]
+  Notes:
 
----
-
-### 8) Architecture Topics — include only when relevant to target role
-
-* Domain-Driven Design (pragmatic usage) — Status: [choose]  Notes:
-* CQRS / MediatR / Hexagonal / Clean Architecture — Status: [choose]  Notes:
-* gRPC / GraphQL — Status: [choose]  Notes:
-* Search platforms (OpenSearch / Elasticsearch / similar) — Status: [choose]  Notes:
-
----
-
-### 9) Ways of Working — keep outcome-focused
-
-* Agile delivery (Scrum / Kanban / hybrid) — Status: [choose]  Notes:
-* Technical mentoring / peer support / code reviews — Status: [choose]  Notes:
-* Written communication (ADRs, runbooks, design notes, incident docs) — Status: [choose]  Notes:
+- Skill: GraphQL
+  Status: [familiar | upskilling | optional]
+  Notes:
 
 ---
 
-### 10) Frontend / UI Collaboration
+## 3) Cloud + CI/CD + Delivery — highest priority
 
-* React — Status: [choose]  Notes:
-* Angular — Status: [choose]  Notes:
-* JavaScript — Status: [choose]  Notes:
-* TypeScript — Status: [choose]  Notes:
+- Skill: AWS
+  Status: [primary | secondary | familiar]
+  Notes: XYZ years. Services used may include EC2, Lambda, RDS, S3, SQS, SNS, CloudFormation, etc.
 
----
+- Skill: CI/CD (example tools: CloudFormation / TeamCity / other pipeline tools)
+  Status: [primary | secondary | familiar]
+  Notes: Add deployment scale, release approach, automation tooling, and environment details if available.
 
-### 11) AI-Assisted Engineering
+- Skill: CloudFormation
+  Status: [primary | secondary | familiar]
+  Notes:
 
-* AI pair-programming workflows — Status: [choose]  Notes:
-* Prompting for tests, refactoring, debugging, code review — Status: [choose]  Notes:
-* Safe usage habits (treat output as draft, review diffs, validate with tests/CI) — Status: [choose]  Notes:
+- Skill: Terraform / Bicep
+  Status: [upskilling | familiar | optional]
+  Notes:
 
-Example neutral note:
+- Skill: Release practices (feature flags, safe rollouts / rollback)
+  Status: [primary | secondary | familiar]
+  Notes: Add canary deployment, rollback, deployment safety, or feature-flag details if available.
 
-> Uses AI coding assistants in a test-first or review-heavy workflow. Treats generated output as a draft, validates changes with tests, CI, and code review, and watches for regressions.
-
----
-
-## Project Evidence / Proof Points
-
-Use this section to collect examples that can later be turned into CV bullets, interview stories, or portfolio notes.
-
-### Project / Role / Client A
-
-* Event-driven integrations or backend workflows — Notes:
-* Reliability or incident reduction improvements — Notes:
-* Deployment / rollout / rollback / release safety examples — Notes:
-
-### Project / Role / Client B
-
-* Observability or logging improvements — Notes:
-* Search / AI / prototype / automation work — Notes:
-* Platform / API / data migration examples — Notes:
+- Skill: Azure
+  Status: [transferable | familiar | secondary]
+  Notes: Knowledge may be transferable from another cloud platform. Add mappings between services if relevant.
 
 ---
 
-## Upskilling Plan — quick credibility wins
+## 4) Messaging / Event-driven — high priority
 
-* Containerize one small service end-to-end — Notes:
-* Deploy that service to a local or cloud cluster and practice logs / rollout / rollback — Notes:
-* Add CI pipeline for build + test + package + scan — Notes:
-* Add one concise architecture diagram and short runbook — Notes:
-* Prepare 2–3 concrete project examples per target role — Notes:
+- Skill: SQS / SNS
+  Status: [primary | secondary | familiar]
+  Notes: Heavy usage / production usage / project usage.
+
+- Skill: RabbitMQ
+  Status: [secondary | familiar | optional]
+  Notes:
+
+- Skill: Kafka
+  Status: [secondary | familiar | upskilling]
+  Notes: Familiar through self-study / project exposure / limited practical use.
+
+- Skill: Operational patterns (DLQ, retries, poison messages, ordering / idempotency)
+  Status: [primary | secondary | familiar]
+  Notes:
+
+---
+
+## 5) Observability + Reliability — high priority
+
+- Skill: Structured logging + correlation IDs
+  Status: [primary | secondary | familiar]
+  Notes: Add logging standards, adoption work, or diagnostic improvements if relevant.
+
+- Skill: Dashboards / alerts (Grafana / Kibana / CloudWatch / Prometheus)
+  Status: [primary | secondary | familiar]
+  Notes: Add alerting, dashboards, escalation support, or monitoring improvements if relevant.
+
+- Skill: Incident response / on-call
+  Status: [primary | secondary | familiar]
+  Notes:
+
+- Skill: SLO thinking (latency, error rate, reliability targets)
+  Status: [primary | secondary | familiar]
+  Notes:
+
+- Skill: Tracing (OpenTelemetry / AppInsights / etc.)
+  Status: [primary | secondary | familiar]
+  Notes: Add distributed tracing, cross-service debugging, or production diagnostics if relevant.
+
+- Skill: DR / reliability work on critical flows
+  Status: [primary | secondary | familiar]
+  Notes:
 
 ---
 
-## Optional status label alternatives
+## 6) Testing & Code Quality — high priority
 
-If you want even more neutral wording, use one of these sets instead of the first legend.
+- Skill: Unit testing (xUnit / NUnit / MSTest)
+  Status: [primary | secondary | familiar]
+  Notes: Specify frameworks used.
 
-### Option A
+- Skill: Integration tests (DB / external deps, test doubles)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-* Advanced
-* Comfortable
-* Familiar
-* Learning
-* Not targeted
+- Skill: Test strategy (pyramid, regression / smoke)
+  Status: [primary | secondary | familiar]
+  Notes:
 
-### Option B
-
-* Proven in recent work
-* Used before
-* Basic exposure
-* Currently developing
-* Out of scope
-
-### Option C
-
-* Confident
-* Practical knowledge
-* Introductory knowledge
-* Refresh needed
-* Not relevant
+- Skill: Static analysis / linters / quality gates
+  Status: [primary | secondary | familiar]
+  Notes:
 
 ---
+
+## 7) Containers & Orchestration — common differentiator
+
+- Skill: Docker / Docker Compose
+  Status: [upskilling | familiar | secondary]
+  Notes: Add practical usage, sample projects, or coursework if relevant.
+
+- Skill: Kubernetes
+  Status: [upskilling | familiar | optional]
+  Notes: Add deployment basics, debugging, rollout, rollback, or coursework if relevant.
+
+- Skill: GitHub Actions container CI (build / push / scan)
+  Status: [upskilling | familiar | secondary]
+  Notes:
+
+---
+
+## 8) Architecture “nice-to-haves” (keep only if relevant to target JD)
+
+- Skill: DDD (pragmatic)
+  Status: [secondary | familiar | optional]
+  Notes:
+
+- Skill: CQRS / MediatR / Hexagonal
+  Status: [upskilling | familiar | optional]
+  Notes: Keep only if relevant to target role.
+
+- Skill: gRPC / GraphQL
+  Status: [upskilling | familiar | optional]
+  Notes:
+
+- Skill: OpenSearch / Elastic
+  Status: [secondary | familiar | optional]
+  Notes: Add search, indexing, semantic search, vector search, or prototype work if relevant.
+
+---
+
+## 9) Ways of working (keep light on CV; prove via delivery outcomes)
+
+- Skill: Cross-functional Agile (Scrum / Kanban)
+  Status: [primary | secondary | familiar]
+  Notes:
+
+- Skill: Mentoring / technical guidance
+  Status: [primary | secondary | familiar]
+  Notes: Keep phrasing aligned with target role.
+
+- Skill: Written communication (ADRs / runbooks)
+  Status: [primary | secondary | familiar]
+  Notes:
+
+---
+
+## 10) Front End
+
+- Skill: React
+  Status: [familiar | secondary | optional]
+  Notes: Can work with an existing codebase / make targeted changes / support integration work.
+
+- Skill: Angular
+  Status: [familiar | secondary | optional]
+  Notes: Can work with an existing codebase / make targeted changes / support integration work.
+
+- Skill: JavaScript
+  Status: [familiar | secondary | optional]
+  Notes:
+
+- Skill: TypeScript
+  Status: [familiar | secondary | optional]
+  Notes: Can work with an existing codebase.
+
+---
+
+## 11) AI Skills
+
+- Skill: AI pair-programming (example tools: Tool A / Tool B / Tool C)
+  Status: [primary | secondary | familiar]
+  Notes: Use AI in a TDD loop; ask for tests first, implement the smallest change, refactor, and validate with CI checks and diff-based review. Treat AI output as a draft and verify carefully to prevent regressions.
+
+---
+
+## 12) Upskilling plan (quick credibility wins)
+
+- Skill: Docker upskilling plan
+  Status: [upskilling | optional]
+  Notes: Ship one small service fully containerised (Dockerfile + Compose). Add course / project / lab details if relevant.
+
+- Skill: Kubernetes upskilling plan
+  Status: [upskilling | optional]
+  Notes: Deploy a service to a local cluster; practice inspect / logs / rollout / rollback.
+
+- Skill: CI upskilling plan
+  Status: [upskilling | optional]
+  Notes: Add a pipeline to build + test + publish image + basic security scan.

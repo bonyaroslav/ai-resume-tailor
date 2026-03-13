@@ -11,6 +11,7 @@ from graph_state import ResponseEnvelope, TriageResult
 from section_ids import is_experience_section
 
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
+_LEADING_BULLET_PATTERN = re.compile(r"^\s*(?:[-*]+|\d+[.)])\s*")
 
 
 class ResponseParseError(ValueError):
@@ -19,6 +20,13 @@ class ResponseParseError(ValueError):
 
 class ResponseSchemaError(ValueError):
     pass
+
+
+def _format_experience_bullet(text: str) -> str:
+    parts = [line.strip() for line in text.splitlines() if line.strip()]
+    collapsed = " ".join(parts).strip()
+    normalized = _LEADING_BULLET_PATTERN.sub("", collapsed).strip()
+    return f"- {normalized}"
 
 
 def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, object]:
@@ -79,7 +87,9 @@ def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, objec
 
             normalized_id = variation_id.strip()
             variation_ids_for_bullet.append(normalized_id)
-            per_variation_text.setdefault(normalized_id, []).append(text.strip())
+            per_variation_text.setdefault(normalized_id, []).append(
+                _format_experience_bullet(text)
+            )
             per_variation_scores.setdefault(normalized_id, []).append(score)
             per_variation_reasoning.setdefault(normalized_id, []).append(
                 ai_reasoning.strip()
