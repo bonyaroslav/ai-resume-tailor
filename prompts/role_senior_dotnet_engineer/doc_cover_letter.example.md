@@ -2,10 +2,11 @@
 knowledge_files:
   - "profile_technical_skills_matrix.md"
   - "rules_cover_letter_playbook.md"
-  - "accomplishments_work_3_argusmedia.md"
-  - "accomplishments_work_2_justeat_2019-2021.md"
-  - "accomplishments_work_1_justeat_2016-2019.md"
+  - "accomplishments_work_3_.md"
+  - "accomplishments_work_2_.md"
+  - "accomplishments_work_1_.md"
 ---
+
 # Role: Expert Technical Recruiter
 
 ## Goal
@@ -26,7 +27,7 @@ Based on the Job Description and my attached cover letter knowledge base, draft 
 - Sort variations from highest score to lowest score.
 - In `ai_reasoning`, include a compact weighted breakdown:
   `coverage=X/35, evidence=Y/25, impact=Z/20, clarity=A/10, compliance=B/10`
-You MUST output your response strictly as a JSON object.
+You MUST output your response strictly as a JSON object matching the schema below. Do not include markdown formatting like ```json. 
 
 {
   "variations": [
@@ -35,7 +36,24 @@ You MUST output your response strictly as a JSON object.
       "score_0_to_100": 5,
       "ai_reasoning": "Explain why this modest approach works for this specific JD.",
       "content_for_template": "The 3-sentence cover letter."
+    },
+    {
+      "id": "B",
+      "score_0_to_100": 4,
+      "ai_reasoning": "Explain why this variation works.",
+      "content_for_template": "The 3-sentence cover letter."
+    },
+    {
+      "id": "C",
+      "score_0_to_100": 4,
+      "ai_reasoning": "Explain why this variation works.",
+      "content_for_template": "The 3-sentence cover letter."
+    },
+    {
+      "id": "D",
+      "score_0_to_100": 5,
+      "ai_reasoning": "Explain why this variation works.",
+      "content_for_template": "The 3-sentence cover letter."
     }
   ]
 }
-

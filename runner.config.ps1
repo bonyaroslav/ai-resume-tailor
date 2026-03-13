@@ -26,7 +26,7 @@ $RunnerConfig = @{
         heavy_model = @{
             ModelName = "gemini-2.5-pro"
             GenerationMode = "concurrent"
-            MinIntervalSeconds = "0"
+            MinIntervalSeconds = "1"
             Max429Attempts = "5"
             BackoffBaseSeconds = "1"
         }
