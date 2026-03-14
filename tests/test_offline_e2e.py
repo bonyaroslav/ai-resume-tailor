@@ -52,7 +52,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
     rendered = Document(str(cv_path))
     output_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
     assert "Senior software engineer" in output_text
-    assert "Languages, core stack: Python, SQL, JavaScript" in output_text
+    assert "- Languages, core stack: Python, SQL, JavaScript" in output_text
     assert "Implemented scalable data processing pipelines" in output_text
 
     cover_text = cover_path.read_text(encoding="utf-8")

@@ -190,7 +190,7 @@ python main.py run --jd-path .\inputs\job_description.txt --company "Offline Smo
 
 Default offline fixture file:
 
-- `knowledge/offline_responses.example.json`
+- `offline_fixtures/<role>/offline_responses.example.json`
 
 Optional custom fixture path:
 

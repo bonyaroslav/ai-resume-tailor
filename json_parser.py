@@ -281,7 +281,7 @@ def _normalize_skills_envelope_with_categories(
                 variation_index=variation_index,
                 category_index=category_index,
             )
-            category_lines.append(f"{category_name}: {category_text}")
+            category_lines.append(f"- {category_name}: {category_text}")
 
         normalized_variations.append(
             {

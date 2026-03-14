@@ -130,10 +130,10 @@ def test_parse_response_envelope_normalizes_skills_schema_and_preserves_meta() -
     assert payload.parsed_payload["meta"]["jd_top_keywords"] == ["python", "aws"]
     assert envelope.variations[0].content_for_template == (
         "Skills\n"
-        "Languages, core stack: Python, SQL\n"
-        "Cloud, infra: AWS\n"
-        "Testing, quality: pytest\n"
-        "Delivery, tooling: Docker"
+        "- Languages, core stack: Python, SQL\n"
+        "- Cloud, infra: AWS\n"
+        "- Testing, quality: pytest\n"
+        "- Delivery, tooling: Docker"
     )
     assert envelope.variations[0].score_0_to_100 == 87
 

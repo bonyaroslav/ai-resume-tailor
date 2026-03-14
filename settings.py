@@ -44,9 +44,13 @@ def role_knowledge_dir(role_name: str) -> Path:
     return Path("knowledge") / role_name
 
 
+def role_offline_fixtures_dir(role_name: str) -> Path:
+    return Path("offline_fixtures") / role_name
+
+
 def default_template_path_for_role(role_name: str) -> Path:
     return role_knowledge_dir(role_name) / DEFAULT_TEMPLATE_FILENAME
 
 
 def default_offline_fixtures_path_for_role(role_name: str) -> Path:
-    return role_knowledge_dir(role_name) / DEFAULT_OFFLINE_FIXTURES_FILENAME
+    return role_offline_fixtures_dir(role_name) / DEFAULT_OFFLINE_FIXTURES_FILENAME
