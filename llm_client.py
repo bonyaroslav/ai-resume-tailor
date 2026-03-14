@@ -65,6 +65,21 @@ class QuotaExceededError(LlmClientError):
         return QuotaExceededError(updated)
 
 
+@dataclass(frozen=True)
+class UsageMetadata:
+    prompt_token_count: int | None = None
+    cached_content_token_count: int | None = None
+    candidates_token_count: int | None = None
+    thoughts_token_count: int | None = None
+    total_token_count: int | None = None
+
+
+@dataclass(frozen=True)
+class LlmGenerationResult:
+    text: str
+    usage_metadata: UsageMetadata
+
+
 def _is_truthy_env(value: str | None) -> bool:
     if value is None:
         return False
@@ -100,7 +115,7 @@ def _default_offline_fixtures_path() -> Path:
     return default_offline_fixtures_path_for_role(role_name)
 
 
-def _generate_offline(section_id: str | None) -> str:
+def _generate_offline(section_id: str | None) -> LlmGenerationResult:
     if not section_id:
         raise LlmClientError("Offline mode requires a section_id for fixture lookup.")
     fixtures = _load_offline_fixtures()
@@ -109,7 +124,7 @@ def _generate_offline(section_id: str | None) -> str:
         raise LlmClientError(
             f"Missing offline fixture payload for section_id '{section_id}'."
         )
-    return json.dumps(payload)
+    return LlmGenerationResult(text=json.dumps(payload), usage_metadata=UsageMetadata())
 
 
 def _extract_text(response: Any) -> str:
@@ -134,6 +149,19 @@ def _extract_text(response: Any) -> str:
             if isinstance(piece, str):
                 parts.append(piece)
     return "\n".join(parts).strip()
+
+
+def _extract_usage_metadata(response: Any) -> UsageMetadata:
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None:
+        return UsageMetadata()
+    return UsageMetadata(
+        prompt_token_count=getattr(usage, "prompt_token_count", None),
+        cached_content_token_count=getattr(usage, "cached_content_token_count", None),
+        candidates_token_count=getattr(usage, "candidates_token_count", None),
+        thoughts_token_count=getattr(usage, "thoughts_token_count", None),
+        total_token_count=getattr(usage, "total_token_count", None),
+    )
 
 
 def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
@@ -299,11 +327,16 @@ def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
 
 
 def _response_config(
-    *, include_schema: bool, section_id: str | None = None
+    *,
+    include_schema: bool,
+    section_id: str | None = None,
+    cached_content_name: str | None = None,
 ) -> dict[str, Any]:
     config: dict[str, Any] = {"response_mime_type": "application/json"}
     if include_schema:
         config["response_json_schema"] = _response_json_schema(section_id)
+    if cached_content_name:
+        config["cached_content"] = cached_content_name
     return config
 
 
@@ -493,6 +526,7 @@ def _request_content_with_backoff(
     model: str,
     include_schema: bool,
     section_id: str | None = None,
+    cached_content_name: str | None = None,
 ) -> Any:
     logger = logging.getLogger("ai_resume_tailor")
     max_attempts = _max_429_attempts()
@@ -508,6 +542,7 @@ def _request_content_with_backoff(
                 model=model,
                 include_schema=include_schema,
                 section_id=section_id,
+                cached_content_name=cached_content_name,
             )
         except Exception as exc:
             status_code = _status_code_from_exception(exc)
@@ -572,28 +607,38 @@ def _request_content(
     model: str,
     include_schema: bool,
     section_id: str | None = None,
+    cached_content_name: str | None = None,
 ) -> Any:
     return client.models.generate_content(
         model=model,
         contents=prompt,
-        config=_response_config(include_schema=include_schema, section_id=section_id),
+        config=_response_config(
+            include_schema=include_schema,
+            section_id=section_id,
+            cached_content_name=cached_content_name,
+        ),
     )
 
 
-def _response_to_text(response: Any) -> str:
+def _response_to_text(response: Any) -> LlmGenerationResult:
     parsed = getattr(response, "parsed", None)
     if parsed is not None:
         if hasattr(parsed, "model_dump"):
             parsed = parsed.model_dump()
         try:
-            return json.dumps(parsed, ensure_ascii=False)
+            return LlmGenerationResult(
+                text=json.dumps(parsed, ensure_ascii=False),
+                usage_metadata=_extract_usage_metadata(response),
+            )
         except TypeError:
             pass
 
     text = _extract_text(response)
     if not text:
         raise LlmClientError("Gemini response did not include text output.")
-    return text
+    return LlmGenerationResult(
+        text=text, usage_metadata=_extract_usage_metadata(response)
+    )
 
 
 def _generate_with_fallback(
@@ -602,7 +647,8 @@ def _generate_with_fallback(
     prompt: str,
     model: str,
     section_id: str | None = None,
-) -> str:
+    cached_content_name: str | None = None,
+) -> LlmGenerationResult:
     try:
         response = _request_content_with_backoff(
             client,
@@ -610,6 +656,7 @@ def _generate_with_fallback(
             model=model,
             include_schema=True,
             section_id=section_id,
+            cached_content_name=cached_content_name,
         )
     except Exception as exc:
         if isinstance(exc, QuotaExceededError):
@@ -625,6 +672,7 @@ def _generate_with_fallback(
                 model=model,
                 include_schema=False,
                 section_id=section_id,
+                cached_content_name=cached_content_name,
             )
         except Exception as fallback_exc:
             if isinstance(fallback_exc, QuotaExceededError):
@@ -641,7 +689,8 @@ def _generate_sync(
     api_key: str,
     model: str,
     section_id: str | None = None,
-) -> str:
+    cached_content_name: str | None = None,
+) -> LlmGenerationResult:
     try:
         from google import genai
     except ImportError as exc:
@@ -653,12 +702,24 @@ def _generate_sync(
         prompt=prompt,
         model=model,
         section_id=section_id,
+        cached_content_name=cached_content_name,
     )
 
 
 async def generate_with_gemini(
-    prompt: str, api_key: str, model: str, section_id: str | None = None
-) -> str:
+    prompt: str,
+    api_key: str,
+    model: str,
+    section_id: str | None = None,
+    cached_content_name: str | None = None,
+) -> LlmGenerationResult:
     if _offline_mode_enabled():
         return _generate_offline(section_id)
-    return await asyncio.to_thread(_generate_sync, prompt, api_key, model, section_id)
+    return await asyncio.to_thread(
+        _generate_sync,
+        prompt,
+        api_key,
+        model,
+        section_id,
+        cached_content_name,
+    )

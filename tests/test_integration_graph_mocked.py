@@ -10,6 +10,7 @@ import graph_nodes
 from checkpoint import load_checkpoint
 from graph_nodes import RuntimeContext
 from graph_state import GraphState, create_initial_state
+from llm_client import LlmGenerationResult, UsageMetadata
 from main import _run_graph
 from prompt_loader import PromptTemplate
 from tests.test_support import make_workspace_temp_dir
@@ -43,7 +44,7 @@ def _build_prompt_templates(run_dir: Path) -> dict[str, PromptTemplate]:
 
 
 def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext:
-    return RuntimeContext(
+    context = RuntimeContext(
         run_dir=run_dir,
         checkpoint_path=run_dir / "state_checkpoint.json",
         template_path=template_path,
@@ -53,11 +54,15 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         job_description="Example JD",
         api_key="test-key",
         model_name="fake-model",
+        role_name="role_senior_dotnet_engineer",
         prompt_templates=_build_prompt_templates(run_dir),
         debug_mode=False,
         auto_approve_review=False,
         auto_approve_triage=False,
     )
+    context.knowledge_cache_registry_path = run_dir / "cache-registry.json"
+    context.knowledge_cache_ttl_seconds = 3600
+    return context
 
 
 def _fake_response_for_section(section_id: str) -> str:
@@ -139,6 +144,19 @@ def _extract_section_id_from_prompt(prompt: str) -> str:
     raise AssertionError(f"Missing section marker in prompt: {prompt}")
 
 
+def _result(text: str, *, cached_tokens: int | None = None) -> LlmGenerationResult:
+    return LlmGenerationResult(
+        text=text,
+        usage_metadata=UsageMetadata(
+            prompt_token_count=10,
+            cached_content_token_count=cached_tokens,
+            candidates_token_count=5,
+            thoughts_token_count=1,
+            total_token_count=16,
+        ),
+    )
+
+
 def test_run_graph_completes_with_mocked_llm_and_review_choices(
     monkeypatch: object,
 ) -> None:
@@ -149,12 +167,17 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     state: GraphState = create_initial_state("integration-run-1")
 
     async def fake_generate_with_gemini(
-        prompt: str, api_key: str, model: str, section_id: str | None = None
-    ) -> str:
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> LlmGenerationResult:
         assert api_key == "test-key"
         assert model == "fake-model"
+        assert cached_content_name is None
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
-        return _fake_response_for_section(resolved_section_id)
+        return _result(_fake_response_for_section(resolved_section_id))
 
     review_inputs = ["continue"]
     for _ in GENERATION_SECTION_IDS:
@@ -195,54 +218,61 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
     state: GraphState = create_initial_state("integration-run-2")
 
     async def fake_generate_with_gemini(
-        prompt: str, api_key: str, model: str, section_id: str | None = None
-    ) -> str:
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> LlmGenerationResult:
         assert api_key == "test-key"
         assert model == "fake-model"
+        assert cached_content_name is None
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
         if resolved_section_id == "triage_job_fit_and_risks":
-            return json.dumps(
-                {
-                    "triage_result": {
-                        "verdict": "AVOID",
-                        "decision_score_0_to_100": 22,
-                        "confidence_0_to_100": 78,
-                        "summary": "High legal and role mismatch risk.",
-                        "raw_subscores": {
-                            "technical_fit_0_to_35": 15,
-                            "company_risk_0_to_20": 4,
-                            "role_quality_0_to_15": 5,
-                            "spain_entity_compat_0_to_20": 1,
-                            "evidence_quality_0_to_10": 7,
-                        },
-                        "top_reasons": ["Reason 1", "Reason 2", "Reason 3"],
-                        "key_risks": [
-                            {
-                                "risk": "Likely legal blocker for Spain setup.",
-                                "severity": "high",
-                                "type": "legal_blocker",
-                                "mitigation": "Do not proceed without explicit B2B path.",
-                            }
-                        ],
-                        "spain_entity_risk": {
-                            "status": "YES",
-                            "confidence_0_to_100": 85,
-                            "explanation": "Evidence points to local employment requirement.",
-                            "recruiter_questions": ["Q1", "Q2", "Q3"],
-                        },
-                        "sources": [
-                            {
-                                "label": "Policy",
-                                "url": "https://example.com/policy",
-                                "evidence_grade": "A",
-                                "used_for": "Employment constraints",
-                            }
-                        ],
-                        "report_markdown": "### Final Verdict\nAvoid.",
+            return _result(
+                json.dumps(
+                    {
+                        "triage_result": {
+                            "verdict": "AVOID",
+                            "decision_score_0_to_100": 22,
+                            "confidence_0_to_100": 78,
+                            "summary": "High legal and role mismatch risk.",
+                            "raw_subscores": {
+                                "technical_fit_0_to_35": 15,
+                                "company_risk_0_to_20": 4,
+                                "role_quality_0_to_15": 5,
+                                "spain_entity_compat_0_to_20": 1,
+                                "evidence_quality_0_to_10": 7,
+                            },
+                            "top_reasons": ["Reason 1", "Reason 2", "Reason 3"],
+                            "key_risks": [
+                                {
+                                    "risk": "Likely legal blocker for Spain setup.",
+                                    "severity": "high",
+                                    "type": "legal_blocker",
+                                    "mitigation": "Do not proceed without explicit B2B path.",
+                                }
+                            ],
+                            "spain_entity_risk": {
+                                "status": "YES",
+                                "confidence_0_to_100": 85,
+                                "explanation": "Evidence points to local employment requirement.",
+                                "recruiter_questions": ["Q1", "Q2", "Q3"],
+                            },
+                            "sources": [
+                                {
+                                    "label": "Policy",
+                                    "url": "https://example.com/policy",
+                                    "evidence_grade": "A",
+                                    "used_for": "Employment constraints",
+                                }
+                            ],
+                            "report_markdown": "### Final Verdict\nAvoid.",
+                        }
                     }
-                }
+                )
             )
-        return _fake_response_for_section(resolved_section_id)
+        return _result(_fake_response_for_section(resolved_section_id))
 
     monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
     monkeypatch.setattr("builtins.input", lambda _: "stop")
@@ -253,3 +283,54 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
     assert final_state.current_node == "triage_stop"
     assert not context.output_cv_path.exists()
     assert not context.output_cover_letter_path.exists()
+
+
+def test_run_graph_passes_cached_content_and_skips_inline_knowledge(
+    monkeypatch: object,
+) -> None:
+    run_dir = make_workspace_temp_dir("integration-mocked-cache")
+    template_path = run_dir / "template.docx"
+    _make_template(template_path)
+    context = _build_runtime_context(run_dir, template_path)
+    context.use_role_wide_knowledge_cache = True
+    context.cached_content_name = "cachedContents/abc123"
+    knowledge_file = run_dir / "knowledge.md"
+    knowledge_file.write_text("inline context to skip", encoding="utf-8")
+    context.prompt_templates["section_professional_summary"] = PromptTemplate(
+        section_id="section_professional_summary",
+        path=run_dir / "section_professional_summary.md",
+        body="SECTION_ID: section_professional_summary",
+        knowledge_files=[knowledge_file],
+    )
+    state: GraphState = create_initial_state("integration-run-3")
+    prompts_seen: list[str] = []
+    cached_names: list[str | None] = []
+
+    async def fake_generate_with_gemini(
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> LlmGenerationResult:
+        prompts_seen.append(prompt)
+        cached_names.append(cached_content_name)
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        return _result(_fake_response_for_section(resolved_section_id), cached_tokens=9)
+
+    review_inputs = ["continue"]
+    for _ in GENERATION_SECTION_IDS:
+        review_inputs.extend(["choose", "A"])
+    response_iter = iter(review_inputs)
+
+    def fake_input(_: str = "") -> str:
+        return next(response_iter)
+
+    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    final_state = asyncio.run(_run_graph(state, context))
+
+    assert final_state.status == "completed"
+    assert all(name == "cachedContents/abc123" for name in cached_names)
+    assert all("inline context to skip" not in prompt for prompt in prompts_seen)

@@ -38,6 +38,11 @@ $manualModelName = [string]$RunnerConfig.ModelName
 $templatePath = [string]$RunnerConfig.TemplatePath
 $debugMode = [bool]$RunnerConfig.Debug
 $runHealthCheck = [bool]$RunnerConfig.RunHealthCheck
+$useRoleWideKnowledgeCache = [bool]$RunnerConfig.UseRoleWideKnowledgeCache
+$invalidateRoleWideKnowledgeCache = [bool]$RunnerConfig.InvalidateRoleWideKnowledgeCache
+$requireCachedTokenConfirmation = [bool]$RunnerConfig.RequireCachedTokenConfirmation
+$knowledgeCacheTtlSeconds = [int]$RunnerConfig.KnowledgeCacheTtlSeconds
+$knowledgeCacheRegistryPath = [string]$RunnerConfig.KnowledgeCacheRegistryPath
 $tierProfiles = $RunnerConfig.TierProfiles
 
 if (-not (Test-Path -LiteralPath $projectRoot)) {
@@ -104,6 +109,12 @@ $env:ART_LLM_MAX_429_ATTEMPTS = [string]$tierProfile.Max429Attempts
 $env:ART_LLM_BACKOFF_BASE_SECONDS = [string]$tierProfile.BackoffBaseSeconds
 $env:ART_AUTO_APPROVE_REVIEW = "1"
 $env:ART_AUTO_APPROVE_TRIAGE = "0"
+$env:ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE = if ($useRoleWideKnowledgeCache) { "1" } else { "0" }
+$env:ART_REQUIRE_CACHED_TOKEN_CONFIRMATION = if ($requireCachedTokenConfirmation) { "1" } else { "0" }
+$env:ART_KNOWLEDGE_CACHE_TTL_SECONDS = [string]$knowledgeCacheTtlSeconds
+if (-not [string]::IsNullOrWhiteSpace($knowledgeCacheRegistryPath)) {
+    $env:ART_KNOWLEDGE_CACHE_REGISTRY_PATH = Resolve-FromRoot -BasePath $projectRoot -InputPath $knowledgeCacheRegistryPath
+}
 
 Write-Host "      TierName=$tierName"
 Write-Host "      ModelName=$modelName"
@@ -114,6 +125,12 @@ Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
 Write-Host "      ART_LLM_BACKOFF_BASE_SECONDS=$env:ART_LLM_BACKOFF_BASE_SECONDS"
 Write-Host "      ART_AUTO_APPROVE_REVIEW=$env:ART_AUTO_APPROVE_REVIEW"
 Write-Host "      ART_AUTO_APPROVE_TRIAGE=$env:ART_AUTO_APPROVE_TRIAGE"
+Write-Host "      ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE=$env:ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE"
+Write-Host "      ART_REQUIRE_CACHED_TOKEN_CONFIRMATION=$env:ART_REQUIRE_CACHED_TOKEN_CONFIRMATION"
+Write-Host "      ART_KNOWLEDGE_CACHE_TTL_SECONDS=$env:ART_KNOWLEDGE_CACHE_TTL_SECONDS"
+if (-not [string]::IsNullOrWhiteSpace($env:ART_KNOWLEDGE_CACHE_REGISTRY_PATH)) {
+    Write-Host "      ART_KNOWLEDGE_CACHE_REGISTRY_PATH=$env:ART_KNOWLEDGE_CACHE_REGISTRY_PATH"
+}
 
 if ($runHealthCheck) {
     Write-Host "[4/5] Running Gemini health check with model $modelName"
@@ -131,5 +148,8 @@ if (-not [string]::IsNullOrWhiteSpace($templatePath)) {
 }
 if ($debugMode) {
     $runArgs += "--debug"
+}
+if ($invalidateRoleWideKnowledgeCache) {
+    $runArgs += "--invalidate-cache"
 }
 & $pythonExe @runArgs

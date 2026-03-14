@@ -163,8 +163,12 @@ def build_prompt_text(
     company_name: str,
     job_description: str,
     retry_note: str | None = None,
+    *,
+    inline_knowledge: bool = True,
 ) -> str:
-    prompt_with_context = inject_context(template.body, template.knowledge_files)
+    prompt_with_context = template.body.strip()
+    if inline_knowledge:
+        prompt_with_context = inject_context(template.body, template.knowledge_files)
     runtime_fields = [
         "## Runtime Input",
         f"Company Name: {company_name}",

@@ -170,7 +170,7 @@ def test_generate_with_fallback_retries_without_schema() -> None:
         model="gemini-test",
     )
 
-    assert '"id": "A"' in result
+    assert '"id": "A"' in result.text
     assert len(models.calls) == 2
     assert models.calls[0]["config"] == _response_config(include_schema=True)
     assert models.calls[1]["config"] == _response_config(include_schema=False)
@@ -210,6 +210,65 @@ def test_generate_with_fallback_uses_experience_schema_when_section_set() -> Non
         include_schema=True,
         section_id="section_experience_2",
     )
+
+
+def test_generate_with_fallback_passes_cached_content_name() -> None:
+    response = SimpleNamespace(
+        parsed={
+            "variations": [
+                {
+                    "id": "A",
+                    "score_0_to_100": 5,
+                    "ai_reasoning": "ok",
+                    "content_for_template": "content",
+                }
+            ]
+        }
+    )
+    models = FakeModels([response])
+    client = SimpleNamespace(models=models)
+
+    _generate_with_fallback(
+        client,
+        prompt="prompt",
+        model="gemini-test",
+        cached_content_name="cachedContents/123",
+    )
+
+    assert models.calls[0]["config"] == _response_config(
+        include_schema=True,
+        cached_content_name="cachedContents/123",
+    )
+
+
+def test_generate_with_fallback_extracts_usage_metadata() -> None:
+    response = SimpleNamespace(
+        parsed={
+            "variations": [
+                {
+                    "id": "A",
+                    "score_0_to_100": 5,
+                    "ai_reasoning": "ok",
+                    "content_for_template": "content",
+                }
+            ]
+        },
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=12,
+            cached_content_token_count=9,
+            candidates_token_count=7,
+            thoughts_token_count=3,
+            total_token_count=28,
+        ),
+    )
+    models = FakeModels([response])
+    client = SimpleNamespace(models=models)
+
+    result = _generate_with_fallback(client, prompt="prompt", model="gemini-test")
+
+    assert result.usage_metadata.prompt_token_count == 12
+    assert result.usage_metadata.cached_content_token_count == 9
+    assert result.usage_metadata.total_token_count == 28
 
 
 def test_generate_with_fallback_raises_readable_error_when_fallback_fails() -> None:
@@ -265,7 +324,7 @@ def test_generate_with_fallback_retries_429_then_succeeds(
         model="gemini-test",
     )
 
-    assert json.loads(result)["variations"][0]["id"] == "A"
+    assert json.loads(result.text)["variations"][0]["id"] == "A"
     assert len(models.calls) == 2
     assert waits == [1.0]
 

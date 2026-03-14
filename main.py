@@ -19,6 +19,12 @@ from graph_nodes import (
 from graph_router import route_next_node
 from graph_state import GraphState, SectionState, create_initial_state, touch_state
 from job_description_loader import read_job_description
+from knowledge_cache import (
+    DEFAULT_KNOWLEDGE_CACHE_REGISTRY_PATH,
+    DEFAULT_KNOWLEDGE_CACHE_TTL_SECONDS,
+    KnowledgeCacheError,
+    prewarm_role_wide_knowledge_cache,
+)
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
@@ -44,6 +50,10 @@ DEFAULT_TEMPLATE_PATH = str(default_template_path_for_role(DEFAULT_ROLE_NAME))
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
 AUTO_APPROVE_TRIAGE_ENV = "ART_AUTO_APPROVE_TRIAGE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
+USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV = "ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE"
+REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV = "ART_REQUIRE_CACHED_TOKEN_CONFIRMATION"
+KNOWLEDGE_CACHE_TTL_SECONDS_ENV = "ART_KNOWLEDGE_CACHE_TTL_SECONDS"
+KNOWLEDGE_CACHE_REGISTRY_PATH_ENV = "ART_KNOWLEDGE_CACHE_REGISTRY_PATH"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -57,6 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--model", default=None)
     run_parser.add_argument("--role", default=None)
     run_parser.add_argument("--debug", action="store_true")
+    run_parser.add_argument("--invalidate-cache", action="store_true")
 
     resume_parser = subparsers.add_parser("resume", help="Resume from checkpoint")
     resume_group = resume_parser.add_mutually_exclusive_group(required=True)
@@ -64,6 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_group.add_argument("--checkpoint-path", type=Path)
     resume_parser.add_argument("--model", default=None)
     resume_parser.add_argument("--role", default=None)
+    resume_parser.add_argument("--invalidate-cache", action="store_true")
 
     status_parser = subparsers.add_parser(
         "status", help="Show status summary for a run"
@@ -82,6 +94,7 @@ def _build_parser() -> argparse.ArgumentParser:
     regenerate_parser.add_argument("--note", required=True)
     regenerate_parser.add_argument("--model", default=None)
     regenerate_parser.add_argument("--role", default=None)
+    regenerate_parser.add_argument("--invalidate-cache", action="store_true")
 
     rebuild_parser = subparsers.add_parser(
         "rebuild-output", help="Rebuild CV and cover letter from approved content"
@@ -116,6 +129,26 @@ def _truthy_env_with_default(value: str | None, *, default: bool) -> bool:
     if not stripped:
         return default
     return _is_truthy_env(stripped)
+
+
+def _int_env_with_default(value: str | None, *, default: int) -> int:
+    if value is None:
+        return default
+    stripped = value.strip()
+    if not stripped:
+        return default
+    try:
+        parsed = int(stripped)
+    except ValueError:
+        return default
+    return max(1, parsed)
+
+
+def _knowledge_cache_registry_path() -> Path:
+    raw_value = os.getenv(KNOWLEDGE_CACHE_REGISTRY_PATH_ENV, "").strip()
+    if not raw_value:
+        return DEFAULT_KNOWLEDGE_CACHE_REGISTRY_PATH
+    return Path(raw_value)
 
 
 def _job_description_preview(job_description: str, *, max_lines: int = 3) -> str:
@@ -479,6 +512,44 @@ def _save_checkpoint_or_raise(
         raise
 
 
+async def _ensure_role_wide_knowledge_cache(
+    *,
+    state: GraphState,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> None:
+    next_node = route_next_node(state)
+    if next_node not in {"triage", "generate_sections"}:
+        return
+    if not context.use_role_wide_knowledge_cache:
+        return
+    if context.cached_content_name:
+        return
+    if context.api_key == "offline-mode":
+        logger.info("Knowledge cache disabled because offline mode is active.")
+        context.use_role_wide_knowledge_cache = False
+        return
+
+    cache = await asyncio.to_thread(
+        prewarm_role_wide_knowledge_cache,
+        api_key=context.api_key,
+        role_name=context.role_name,
+        model_name=context.model_name,
+        prompt_templates=context.prompt_templates,
+        registry_path=context.knowledge_cache_registry_path,
+        ttl_seconds=context.knowledge_cache_ttl_seconds,
+        invalidate_cache=context.invalidate_role_wide_knowledge_cache,
+        logger=logger,
+    )
+    context.cached_content_name = cache.remote_cache_name
+    logger.info(
+        "Knowledge cache ready remote_cache_name=%s fingerprint=%s expires_at=%s",
+        cache.remote_cache_name,
+        cache.fingerprint,
+        cache.expires_at or "-",
+    )
+
+
 async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
     logger = configure_logging(context.run_dir, context.debug_mode)
     logger.info("Run started. run_id=%s, model=%s", state.run_id, context.model_name)
@@ -496,6 +567,12 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
         next_node = route_next_node(state)
         if next_node == "end":
             break
+
+        await _ensure_role_wide_knowledge_cache(
+            state=state,
+            context=context,
+            logger=logger,
+        )
 
         _save_checkpoint_or_raise(
             checkpoint_path=context.checkpoint_path,
@@ -601,7 +678,7 @@ def _prepare_runtime_context(
     preflight_template(template_path, TEMPLATE_SECTION_IDS)
 
     checkpoint_path = run_dir / "state_checkpoint.json"
-    return RuntimeContext(
+    context = RuntimeContext(
         run_dir=run_dir,
         checkpoint_path=checkpoint_path,
         template_path=template_path,
@@ -611,6 +688,7 @@ def _prepare_runtime_context(
         job_description=job_description,
         api_key=_load_api_key(),
         model_name=model_name,
+        role_name=role_name,
         prompt_templates=prompt_templates,
         debug_mode=debug_mode,
         auto_approve_review=_truthy_env_with_default(
@@ -621,7 +699,28 @@ def _prepare_runtime_context(
             os.getenv(AUTO_APPROVE_TRIAGE_ENV),
             default=False,
         ),
+        use_role_wide_knowledge_cache=_truthy_env_with_default(
+            os.getenv(USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV),
+            default=False,
+        ),
+        require_cached_token_confirmation=_truthy_env_with_default(
+            os.getenv(REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV),
+            default=True,
+        ),
+        cached_content_name=None,
     )
+    return context
+
+
+def _configure_cache_runtime_context(
+    context: RuntimeContext, *, invalidate_cache: bool
+) -> None:
+    context.invalidate_role_wide_knowledge_cache = invalidate_cache
+    context.knowledge_cache_ttl_seconds = _int_env_with_default(
+        os.getenv(KNOWLEDGE_CACHE_TTL_SECONDS_ENV),
+        default=DEFAULT_KNOWLEDGE_CACHE_TTL_SECONDS,
+    )
+    context.knowledge_cache_registry_path = _knowledge_cache_registry_path()
 
 
 async def _handle_run(args: argparse.Namespace) -> None:
@@ -670,6 +769,10 @@ async def _handle_run(args: argparse.Namespace) -> None:
         model_name=model_name,
         role_name=role_name,
         debug_mode=debug_mode,
+    )
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=getattr(args, "invalidate_cache", False),
     )
 
     write_run_metadata(
@@ -722,6 +825,10 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         model_name=model_name,
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
+    )
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=getattr(args, "invalidate_cache", False),
     )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
@@ -777,6 +884,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=getattr(args, "invalidate_cache", False),
+    )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
     _print_next_steps(final_state, run_dir)
@@ -816,6 +927,10 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
     )
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=False,
+    )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
     _print_next_steps(final_state, run_dir)
@@ -842,7 +957,12 @@ def main() -> None:
             asyncio.run(_handle_rebuild_output(args))
             return
         parser.error(f"Unknown command: {args.command}")
-    except (CheckpointError, PromptValidationError, TemplateValidationError) as exc:
+    except (
+        CheckpointError,
+        PromptValidationError,
+        TemplateValidationError,
+        KnowledgeCacheError,
+    ) as exc:
         raise SystemExit(str(exc)) from exc
 
 

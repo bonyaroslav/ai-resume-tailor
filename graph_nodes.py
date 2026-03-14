@@ -4,8 +4,8 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from time import monotonic
 from pathlib import Path
+from time import monotonic
 
 from checkpoint import save_checkpoint
 from console_ui import (
@@ -26,7 +26,7 @@ from json_parser import (
     parse_response_envelope,
     parse_triage_result,
 )
-from llm_client import QuotaExceededError, generate_with_gemini
+from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_gemini
 from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
 from workflow_definition import (
@@ -52,7 +52,7 @@ _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class RuntimeContext:
     run_dir: Path
     checkpoint_path: Path
@@ -63,10 +63,17 @@ class RuntimeContext:
     job_description: str
     api_key: str
     model_name: str
+    role_name: str
     prompt_templates: dict[str, PromptTemplate]
     debug_mode: bool
     auto_approve_review: bool
     auto_approve_triage: bool
+    use_role_wide_knowledge_cache: bool = False
+    require_cached_token_confirmation: bool = True
+    cached_content_name: str | None = None
+    invalidate_role_wide_knowledge_cache: bool = False
+    knowledge_cache_ttl_seconds: int = 0
+    knowledge_cache_registry_path: Path | None = None
 
 
 def _find_variation(variations: list[Variation], variation_id: str) -> Variation | None:
@@ -169,6 +176,102 @@ async def _wait_for_llm_pacing_slot(section_id: str, logger: logging.Logger) -> 
         )
 
 
+def _log_llm_usage(
+    result: LlmGenerationResult,
+    *,
+    section_id: str,
+    prompt: str,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> None:
+    usage = result.usage_metadata
+    logger.info(
+        "LLM usage section_id=%s cached_content_name=%s prompt_chars=%s prompt_token_count=%s cached_content_token_count=%s candidates_token_count=%s thoughts_token_count=%s total_token_count=%s",
+        section_id,
+        context.cached_content_name or "-",
+        len(prompt),
+        usage.prompt_token_count if usage.prompt_token_count is not None else "-",
+        (
+            usage.cached_content_token_count
+            if usage.cached_content_token_count is not None
+            else "-"
+        ),
+        (
+            usage.candidates_token_count
+            if usage.candidates_token_count is not None
+            else "-"
+        ),
+        usage.thoughts_token_count if usage.thoughts_token_count is not None else "-",
+        usage.total_token_count if usage.total_token_count is not None else "-",
+    )
+    if not context.cached_content_name:
+        return
+    if not context.require_cached_token_confirmation:
+        return
+    cached_tokens = usage.cached_content_token_count or 0
+    if cached_tokens <= 0:
+        raise RuntimeError(
+            "Cached token confirmation failed for "
+            f"section '{section_id}' using '{context.cached_content_name}'."
+        )
+
+
+async def _request_llm(
+    *,
+    prompt: str,
+    section_id: str,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> LlmGenerationResult:
+    heartbeat_interval_seconds = _heartbeat_interval_seconds()
+    await _wait_for_llm_pacing_slot(section_id, logger)
+    logger.info(
+        "LLM request started section_id=%s heartbeat_s=%s cached_content_name=%s",
+        section_id,
+        heartbeat_interval_seconds,
+        context.cached_content_name or "-",
+    )
+    request_started = monotonic()
+    request_task = asyncio.create_task(
+        generate_with_gemini(
+            prompt,
+            context.api_key,
+            context.model_name,
+            section_id,
+            context.cached_content_name,
+        )
+    )
+    while True:
+        try:
+            result = await asyncio.wait_for(
+                asyncio.shield(request_task),
+                timeout=heartbeat_interval_seconds,
+            )
+            break
+        except asyncio.TimeoutError:
+            elapsed_s = int(monotonic() - request_started)
+            logger.info(
+                "LLM request in progress section_id=%s elapsed_s=%s",
+                section_id,
+                elapsed_s,
+            )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(section_id) from exc
+    logger.info(
+        "LLM request completed section_id=%s duration_ms=%s",
+        section_id,
+        int((monotonic() - request_started) * 1000),
+    )
+    _log_llm_usage(
+        result,
+        section_id=section_id,
+        prompt=prompt,
+        context=context,
+        logger=logger,
+    )
+    return result
+
+
 async def _generate_section_variations(
     section_id: str,
     section_state: SectionState,
@@ -181,52 +284,25 @@ async def _generate_section_variations(
         company_name=context.company_name,
         job_description=context.job_description,
         retry_note=section_state.user_note,
+        inline_knowledge=not context.use_role_wide_knowledge_cache,
     )
     render_prompt(section_id, prompt)
 
     last_error: Exception | None = None
-    heartbeat_interval_seconds = _heartbeat_interval_seconds()
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
-        await _wait_for_llm_pacing_slot(section_id, logger)
-        logger.info(
-            "LLM request started section_id=%s attempt=%s heartbeat_s=%s",
-            section_id,
-            attempt + 1,
-            heartbeat_interval_seconds,
-        )
-        request_started = monotonic()
-        request_task = asyncio.create_task(
-            generate_with_gemini(
-                prompt, context.api_key, context.model_name, section_id
-            )
-        )
-        while True:
-            try:
-                raw_response = await asyncio.wait_for(
-                    asyncio.shield(request_task),
-                    timeout=heartbeat_interval_seconds,
-                )
-                break
-            except asyncio.TimeoutError:
-                elapsed_s = int(monotonic() - request_started)
-                logger.info(
-                    "LLM request in progress section_id=%s attempt=%s elapsed_s=%s",
-                    section_id,
-                    attempt + 1,
-                    elapsed_s,
-                )
-            except QuotaExceededError as exc:
-                raise exc.with_section_id(section_id) from exc
-        logger.info(
-            "LLM request completed section_id=%s attempt=%s duration_ms=%s",
-            section_id,
-            attempt + 1,
-            int((monotonic() - request_started) * 1000),
-        )
-        if context.debug_mode:
-            _write_debug_response(context.run_dir, section_id, attempt, raw_response)
         try:
-            envelope = parse_response_envelope(raw_response, section_id=section_id)
+            result = await _request_llm(
+                prompt=prompt,
+                section_id=section_id,
+                context=context,
+                logger=logger,
+            )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(section_id) from exc
+        if context.debug_mode:
+            _write_debug_response(context.run_dir, section_id, attempt, result.text)
+        try:
+            envelope = parse_response_envelope(result.text, section_id=section_id)
         except ResponseParseError as exc:
             log_failure(
                 logger,
@@ -298,55 +374,28 @@ async def _generate_triage_result(
         company_name=context.company_name,
         job_description=context.job_description,
         retry_note=section_state.user_note,
+        inline_knowledge=not context.use_role_wide_knowledge_cache,
     )
     render_prompt(TRIAGE_SECTION_ID, prompt)
 
     last_error: Exception | None = None
-    heartbeat_interval_seconds = _heartbeat_interval_seconds()
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
-        await _wait_for_llm_pacing_slot(TRIAGE_SECTION_ID, logger)
-        logger.info(
-            "LLM request started section_id=%s attempt=%s heartbeat_s=%s",
-            TRIAGE_SECTION_ID,
-            attempt + 1,
-            heartbeat_interval_seconds,
-        )
-        request_started = monotonic()
-        request_task = asyncio.create_task(
-            generate_with_gemini(
-                prompt, context.api_key, context.model_name, TRIAGE_SECTION_ID
+        try:
+            result = await _request_llm(
+                prompt=prompt,
+                section_id=TRIAGE_SECTION_ID,
+                context=context,
+                logger=logger,
             )
-        )
-        while True:
-            try:
-                raw_response = await asyncio.wait_for(
-                    asyncio.shield(request_task),
-                    timeout=heartbeat_interval_seconds,
-                )
-                break
-            except asyncio.TimeoutError:
-                elapsed_s = int(monotonic() - request_started)
-                logger.info(
-                    "LLM request in progress section_id=%s attempt=%s elapsed_s=%s",
-                    TRIAGE_SECTION_ID,
-                    attempt + 1,
-                    elapsed_s,
-                )
-            except QuotaExceededError as exc:
-                raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
-        logger.info(
-            "LLM request completed section_id=%s attempt=%s duration_ms=%s",
-            TRIAGE_SECTION_ID,
-            attempt + 1,
-            int((monotonic() - request_started) * 1000),
-        )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
 
         if context.debug_mode:
             _write_debug_response(
-                context.run_dir, TRIAGE_SECTION_ID, attempt, raw_response
+                context.run_dir, TRIAGE_SECTION_ID, attempt, result.text
             )
         try:
-            return parse_triage_result(raw_response)
+            return parse_triage_result(result.text)
         except ResponseParseError as exc:
             log_failure(
                 logger,
@@ -374,7 +423,7 @@ async def _generate_triage_result(
 
     raise RuntimeError(
         "LLM triage response failed parsing after allowed retries."
-    ) from (last_error)
+    ) from last_error
 
 
 async def node_triage(

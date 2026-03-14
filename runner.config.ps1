@@ -5,9 +5,9 @@ $RunnerConfig = @{
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Mindera.txt"
-    CompanyName = "Mindera"
-    TierName = "freetier"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ TheWhiteam.txt"
+    CompanyName = "TheWhiteam"
+    TierName = "heavy_model"
     RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.
@@ -36,4 +36,9 @@ $RunnerConfig = @{
     TemplatePath = ""
     Debug = $false
     RunHealthCheck = $true
+    UseRoleWideKnowledgeCache = $true
+    InvalidateRoleWideKnowledgeCache = $false
+    RequireCachedTokenConfirmation = $true
+    KnowledgeCacheTtlSeconds = 3600
+    KnowledgeCacheRegistryPath = ".\runs\_cache\role_wide_knowledge_cache_registry.json"
 }

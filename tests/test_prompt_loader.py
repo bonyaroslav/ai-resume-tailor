@@ -146,3 +146,26 @@ def test_build_prompt_text_always_includes_job_description_runtime_input() -> No
     assert "Company Name: Acme" in prompt
     assert "Job Description:\nNeed Python, AWS, and strong ownership." in prompt
     assert "Must mentor juniors." in prompt
+
+
+def test_build_prompt_text_skips_inline_knowledge_when_disabled() -> None:
+    tmp_path = make_workspace_temp_dir("prompt-loader-inline-skip")
+    knowledge_file = tmp_path / "knowledge.md"
+    knowledge_file.write_text("secret context", encoding="utf-8")
+    template = PromptTemplate(
+        section_id="section_professional_summary",
+        path=tmp_path / "section_professional_summary.md",
+        body="Write three summary options.",
+        knowledge_files=[knowledge_file],
+    )
+
+    prompt = build_prompt_text(
+        template=template,
+        company_name="Acme",
+        job_description="Need Python.",
+        inline_knowledge=False,
+    )
+
+    assert "secret context" not in prompt
+    assert "## Context Files" not in prompt
+    assert "Write three summary options." in prompt
