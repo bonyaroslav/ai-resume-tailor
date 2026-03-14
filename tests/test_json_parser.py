@@ -7,6 +7,7 @@ from json_parser import (
     ResponseSchemaError,
     clean_llm_json,
     parse_response_envelope,
+    parse_response_envelope_payload,
     parse_triage_result,
 )
 
@@ -96,6 +97,53 @@ def test_parse_response_envelope_accepts_bom_prefix() -> None:
     raw = '\ufeff{"variations":[{"id":"A","score_0_to_100":4,"ai_reasoning":"r","content_for_template":"c"}]}'
     envelope = parse_response_envelope(raw)
     assert envelope.variations[0].id == "A"
+
+
+def test_parse_response_envelope_normalizes_skills_schema_and_preserves_meta() -> None:
+    raw = """
+{
+  "meta": {
+    "jd_top_keywords": ["python", "aws"],
+    "covered_keywords": ["python"],
+    "missing_keywords_not_in_matrix": ["aws"]
+  },
+  "variations": [
+    {
+      "id": "A",
+      "score_0_to_100": 87,
+      "ai_reasoning": "Best keyword alignment.",
+      "text": "Skills\\nLanguages: Python, SQL"
+    }
+  ]
+}
+"""
+    payload = parse_response_envelope_payload(
+        raw, section_id="section_skills_alignment"
+    )
+    envelope = parse_response_envelope(raw, section_id="section_skills_alignment")
+
+    assert payload.parsed_payload["meta"]["jd_top_keywords"] == ["python", "aws"]
+    assert envelope.variations[0].content_for_template == (
+        "Skills" + "\n" + "Languages: Python, SQL"
+    )
+    assert envelope.variations[0].score_0_to_100 == 87
+
+
+def test_parse_response_envelope_rejects_skills_payload_without_meta() -> None:
+    raw = """
+{
+  "variations": [
+    {
+      "id": "A",
+      "score_0_to_100": 87,
+      "ai_reasoning": "Best keyword alignment.",
+      "text": "Skills\\nLanguages: Python, SQL"
+    }
+  ]
+}
+"""
+    with pytest.raises(ResponseSchemaError, match="meta object"):
+        parse_response_envelope(raw, section_id="section_skills_alignment")
 
 
 @pytest.mark.parametrize(

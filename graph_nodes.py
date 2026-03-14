@@ -19,11 +19,20 @@ from document_builder import (
     preflight_template,
     write_cover_letter,
 )
-from graph_state import GraphState, SectionState, TriageResult, Variation, touch_state
+from graph_state import (
+    AiOutputRecord,
+    GraphState,
+    ResponseEnvelope,
+    SectionState,
+    TriageResult,
+    Variation,
+    touch_state,
+)
 from json_parser import (
     ResponseParseError,
     ResponseSchemaError,
-    parse_response_envelope,
+    parse_response_envelope_payload,
+    parse_response_payload,
     parse_triage_result,
 )
 from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_gemini
@@ -272,6 +281,10 @@ async def _request_llm(
     return result
 
 
+def _next_ai_output_attempt(section_state: SectionState) -> int:
+    return len(section_state.ai_outputs) + 1
+
+
 async def _generate_section_variations(
     section_id: str,
     section_state: SectionState,
@@ -301,9 +314,19 @@ async def _generate_section_variations(
             raise exc.with_section_id(section_id) from exc
         if context.debug_mode:
             _write_debug_response(context.run_dir, section_id, attempt, result.text)
+
+        output_attempt = _next_ai_output_attempt(section_state)
         try:
-            envelope = parse_response_envelope(result.text, section_id=section_id)
+            parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
+            section_state.ai_outputs.append(
+                AiOutputRecord(
+                    attempt=output_attempt,
+                    status="parse_error",
+                    raw_response=result.text,
+                    error_detail=str(exc),
+                )
+            )
             log_failure(
                 logger,
                 category="parse_error",
@@ -315,7 +338,22 @@ async def _generate_section_variations(
             )
             last_error = exc
             continue
+
+        try:
+            payload = parse_response_envelope_payload(
+                result.text, section_id=section_id
+            )
+            envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
         except ResponseSchemaError as exc:
+            section_state.ai_outputs.append(
+                AiOutputRecord(
+                    attempt=output_attempt,
+                    status="schema_error",
+                    raw_response=result.text,
+                    parsed_payload=parsed_payload,
+                    error_detail=str(exc),
+                )
+            )
             log_failure(
                 logger,
                 category="schema_error",
@@ -327,6 +365,16 @@ async def _generate_section_variations(
             )
             last_error = exc
             continue
+
+        section_state.ai_outputs.append(
+            AiOutputRecord(
+                attempt=output_attempt,
+                status="parsed",
+                raw_response=result.text,
+                parsed_payload=payload.parsed_payload,
+                normalized_payload=payload.normalized_payload,
+            )
+        )
 
         if not envelope.variations:
             last_error = ResponseSchemaError("Envelope contains no variations.")
@@ -394,9 +442,19 @@ async def _generate_triage_result(
             _write_debug_response(
                 context.run_dir, TRIAGE_SECTION_ID, attempt, result.text
             )
+
+        output_attempt = _next_ai_output_attempt(section_state)
         try:
-            return parse_triage_result(result.text)
+            parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
+            section_state.ai_outputs.append(
+                AiOutputRecord(
+                    attempt=output_attempt,
+                    status="parse_error",
+                    raw_response=result.text,
+                    error_detail=str(exc),
+                )
+            )
             log_failure(
                 logger,
                 category="parse_error",
@@ -408,7 +466,19 @@ async def _generate_triage_result(
             )
             last_error = exc
             continue
+
+        try:
+            triage_result = parse_triage_result(result.text)
         except ResponseSchemaError as exc:
+            section_state.ai_outputs.append(
+                AiOutputRecord(
+                    attempt=output_attempt,
+                    status="schema_error",
+                    raw_response=result.text,
+                    parsed_payload=parsed_payload,
+                    error_detail=str(exc),
+                )
+            )
             log_failure(
                 logger,
                 category="schema_error",
@@ -420,6 +490,19 @@ async def _generate_triage_result(
             )
             last_error = exc
             continue
+
+        section_state.ai_outputs.append(
+            AiOutputRecord(
+                attempt=output_attempt,
+                status="parsed",
+                raw_response=result.text,
+                parsed_payload=parsed_payload,
+                normalized_payload={
+                    "triage_result": triage_result.model_dump(mode="json")
+                },
+            )
+        )
+        return triage_result
 
     raise RuntimeError(
         "LLM triage response failed parsing after allowed retries."
@@ -446,6 +529,7 @@ async def node_triage(
         selected_content=selected.content_for_template,
         user_note=section_state.user_note,
         retry_count=section_state.retry_count,
+        ai_outputs=section_state.ai_outputs,
     )
 
     suggested_action = "stop" if triage_result.verdict == "AVOID" else "continue"
@@ -557,6 +641,7 @@ async def node_generate_sections(
             selected_content=None,
             user_note=None,
             retry_count=section_state.retry_count,
+            ai_outputs=section_state.ai_outputs,
         )
 
     state.review_queue = targets

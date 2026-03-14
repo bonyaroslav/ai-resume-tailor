@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from json import JSONDecodeError
 from statistics import mean
 
@@ -12,6 +13,7 @@ from section_ids import is_experience_section
 
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
 _LEADING_BULLET_PATTERN = re.compile(r"^\s*(?:[-*]+|\d+[.)])\s*")
+_SKILLS_SECTION_ID = "section_skills_alignment"
 
 
 class ResponseParseError(ValueError):
@@ -20,6 +22,12 @@ class ResponseParseError(ValueError):
 
 class ResponseSchemaError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class ParsedResponsePayload:
+    parsed_payload: dict[str, object]
+    normalized_payload: dict[str, object]
 
 
 def _format_experience_bullet(text: str) -> str:
@@ -123,6 +131,67 @@ def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, objec
     return {"variations": normalized_variations}
 
 
+def _normalize_skills_envelope(parsed: dict[str, object]) -> dict[str, object]:
+    meta = parsed.get("meta")
+    if not isinstance(meta, dict):
+        raise ResponseSchemaError("Skills payload must contain a meta object.")
+
+    for key in (
+        "jd_top_keywords",
+        "covered_keywords",
+        "missing_keywords_not_in_matrix",
+    ):
+        values = meta.get(key)
+        if not isinstance(values, list) or not all(
+            isinstance(item, str) for item in values
+        ):
+            raise ResponseSchemaError(f"Skills meta.{key} must be an array of strings.")
+
+    variations = parsed.get("variations")
+    if not isinstance(variations, list) or not variations:
+        raise ResponseSchemaError(
+            "Skills payload must contain a non-empty variations array."
+        )
+
+    normalized_variations: list[dict[str, object]] = []
+    for variation_index, variation in enumerate(variations, start=1):
+        if not isinstance(variation, dict):
+            raise ResponseSchemaError(
+                f"Skills variation at index {variation_index} must be an object."
+            )
+        variation_id = variation.get("id")
+        score = variation.get("score_0_to_100")
+        ai_reasoning = variation.get("ai_reasoning")
+        text = variation.get("text")
+        if not isinstance(variation_id, str) or not variation_id.strip():
+            raise ResponseSchemaError(
+                f"Skills variation.id must be a non-empty string (variation={variation_index})."
+            )
+        if not isinstance(score, int) or score < 0 or score > 100:
+            raise ResponseSchemaError(
+                "Skills variation.score_0_to_100 must be an integer between 0 and 100 "
+                f"(variation={variation_index})."
+            )
+        if not isinstance(ai_reasoning, str):
+            raise ResponseSchemaError(
+                f"Skills variation.ai_reasoning must be a string (variation={variation_index})."
+            )
+        if not isinstance(text, str) or not text.strip():
+            raise ResponseSchemaError(
+                f"Skills variation.text must be a non-empty string (variation={variation_index})."
+            )
+        normalized_variations.append(
+            {
+                "id": variation_id.strip(),
+                "score_0_to_100": score,
+                "ai_reasoning": ai_reasoning,
+                "content_for_template": text.strip(),
+            }
+        )
+
+    return {"variations": normalized_variations}
+
+
 def clean_llm_json(raw_text: str) -> str:
     text = raw_text.strip()
     text = text.lstrip("\ufeff")
@@ -177,7 +246,7 @@ def _extract_first_json_object(text: str) -> str | None:
     return None
 
 
-def _parse_json_payload(raw_text: str) -> object:
+def parse_response_payload(raw_text: str) -> dict[str, object]:
     cleaned = clean_llm_json(raw_text)
     raw_candidates = [cleaned]
     extracted = _extract_first_json_object(cleaned)
@@ -194,9 +263,13 @@ def _parse_json_payload(raw_text: str) -> object:
 
     for candidate in candidates:
         try:
-            return json.loads(candidate)
+            parsed = json.loads(candidate)
         except JSONDecodeError as exc:
             last_error = exc
+            continue
+        if not isinstance(parsed, dict):
+            raise ResponseSchemaError("LLM response must be a JSON object.")
+        return parsed
 
     line = last_error.lineno if last_error else "?"
     column = last_error.colno if last_error else "?"
@@ -206,23 +279,45 @@ def _parse_json_payload(raw_text: str) -> object:
     ) from last_error
 
 
+def normalize_response_payload(
+    parsed: dict[str, object],
+    *,
+    section_id: str | None = None,
+) -> dict[str, object]:
+    if section_id == _SKILLS_SECTION_ID:
+        return _normalize_skills_envelope(parsed)
+    if (
+        section_id is not None
+        and is_experience_section(section_id)
+        and "bullets" in parsed
+    ):
+        return _normalize_experience_envelope(parsed)
+    return parsed
+
+
+def parse_response_envelope_payload(
+    raw_text: str,
+    *,
+    section_id: str | None = None,
+) -> ParsedResponsePayload:
+    parsed_payload = parse_response_payload(raw_text)
+    normalized_payload = normalize_response_payload(
+        parsed_payload, section_id=section_id
+    )
+    return ParsedResponsePayload(
+        parsed_payload=parsed_payload,
+        normalized_payload=normalized_payload,
+    )
+
+
 def parse_response_envelope(
     raw_text: str,
     *,
     section_id: str | None = None,
 ) -> ResponseEnvelope:
-    parsed = _parse_json_payload(raw_text)
-
-    if (
-        section_id is not None
-        and is_experience_section(section_id)
-        and isinstance(parsed, dict)
-        and "bullets" in parsed
-    ):
-        parsed = _normalize_experience_envelope(parsed)
-
+    payload = parse_response_envelope_payload(raw_text, section_id=section_id)
     try:
-        return ResponseEnvelope.model_validate(parsed)
+        return ResponseEnvelope.model_validate(payload.normalized_payload)
     except ValidationError as exc:
         raise ResponseSchemaError(
             "LLM response does not match expected envelope schema."
@@ -230,10 +325,7 @@ def parse_response_envelope(
 
 
 def parse_triage_result(raw_text: str) -> TriageResult:
-    parsed = _parse_json_payload(raw_text)
-    if not isinstance(parsed, dict):
-        raise ResponseSchemaError("LLM triage response must be a JSON object.")
-
+    parsed = parse_response_payload(raw_text)
     triage_result = parsed.get("triage_result")
     if not isinstance(triage_result, dict):
         raise ResponseSchemaError(

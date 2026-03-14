@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from graph_state import GraphState, SectionState, Variation
+from graph_state import GraphState, SectionState, Variation, create_initial_state
 from main import (
     _ensure_regenerate_allowed,
+    _mark_sections_for_regeneration,
     _normalize_regeneration_note,
     _parse_requested_sections,
     _resolve_run_checkpoint_pair,
@@ -116,3 +117,43 @@ def test_ensure_regenerate_allowed_rejects_triage_stop() -> None:
     )
     with pytest.raises(ValueError):
         _ensure_regenerate_allowed(state)
+
+
+def test_mark_sections_for_regeneration_preserves_ai_outputs() -> None:
+    state = create_initial_state("run-regen")
+    section_state = state.section_states["section_skills_alignment"]
+    section_state.selected_variation_id = "A"
+    section_state.selected_content = "Skills"
+    section_state.variations = [
+        Variation(
+            id="A",
+            score_0_to_100=97,
+            ai_reasoning="best",
+            content_for_template="Skills",
+        )
+    ]
+    section_state.ai_outputs = [
+        {
+            "attempt": 1,
+            "status": "parsed",
+            "raw_response": "{}",
+            "parsed_payload": {
+                "meta": {
+                    "jd_top_keywords": ["python"],
+                    "covered_keywords": ["python"],
+                    "missing_keywords_not_in_matrix": [],
+                },
+                "variations": [],
+            },
+            "normalized_payload": {"variations": []},
+            "error_detail": None,
+        }
+    ]
+
+    _mark_sections_for_regeneration(state, ["section_skills_alignment"], "retry")
+
+    updated = state.section_states["section_skills_alignment"]
+    assert updated.status == "retry_requested"
+    assert updated.selected_content is None
+    assert updated.variations == []
+    assert len(updated.ai_outputs) == 1

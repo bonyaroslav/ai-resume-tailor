@@ -57,12 +57,17 @@
     ]
   },
   "section_skills_alignment": {
+    "meta": {
+      "jd_top_keywords": ["Python", "SQL", "AWS", "CI/CD", "observability"],
+      "covered_keywords": ["Python", "SQL", "AWS", "CI/CD", "observability"],
+      "missing_keywords_not_in_matrix": []
+    },
     "variations": [
       {
         "id": "A",
         "score_0_to_100": 90,
         "ai_reasoning": "Clear categorized skills structure.",
-        "content_for_template": "Languages: Python, SQL, JavaScript\nFrameworks/Tools: FastAPI, pytest, Docker, GitHub Actions\nCloud/Infrastructure: AWS, CI/CD, Linux\nArchitecture/Practices: API design, observability, performance tuning"
+        "text": "Skills\nLanguages: Python, SQL, JavaScript\nFrameworks/Tools: FastAPI, pytest, Docker, GitHub Actions\nCloud/Infrastructure: AWS, CI/CD, Linux\nArchitecture/Practices: API design, observability, performance tuning"
       }
     ]
   },

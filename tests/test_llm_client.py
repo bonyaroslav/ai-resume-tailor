@@ -137,6 +137,21 @@ def test_response_json_schema_for_experience_sections_uses_bullets_shape() -> No
     assert "content_for_template" not in variation_schema["properties"]
 
 
+def test_response_json_schema_for_skills_uses_meta_and_text_shape() -> None:
+    schema = _response_json_schema("section_skills_alignment")
+    assert "additionalProperties" not in schema
+    assert schema["required"] == ["meta", "variations"]
+    meta_schema = schema["properties"]["meta"]
+    assert meta_schema["required"] == [
+        "jd_top_keywords",
+        "covered_keywords",
+        "missing_keywords_not_in_matrix",
+    ]
+    variation_schema = schema["properties"]["variations"]["items"]
+    assert "text" in variation_schema["properties"]
+    assert "content_for_template" not in variation_schema["properties"]
+
+
 def test_response_json_schema_for_triage_uses_triage_result_shape() -> None:
     schema = _response_json_schema("triage_job_fit_and_risks")
     assert "additionalProperties" not in schema

@@ -11,6 +11,18 @@ DEFAULT_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"content_for_template"',
 )
 
+SKILLS_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
+    '"meta"',
+    '"jd_top_keywords"',
+    '"covered_keywords"',
+    '"missing_keywords_not_in_matrix"',
+    '"variations"',
+    '"id"',
+    '"score_0_to_100"',
+    '"ai_reasoning"',
+    '"text"',
+)
+
 EXPERIENCE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"bullets"',
     '"bullet_id"',
@@ -47,6 +59,8 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
         required_keys = DEFAULT_REQUIRED_JSON_SCHEMA_KEYS
         if section_id == "triage_job_fit_and_risks":
             required_keys = TRIAGE_REQUIRED_JSON_SCHEMA_KEYS
+        elif section_id == "section_skills_alignment":
+            required_keys = SKILLS_REQUIRED_JSON_SCHEMA_KEYS
         elif section_id.startswith("section_experience_"):
             required_keys = EXPERIENCE_REQUIRED_JSON_SCHEMA_KEYS
 
@@ -61,3 +75,7 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
             assert (
                 '"variations"' not in template.body
             ), "Prompt 'triage_job_fit_and_risks' must not use variations envelope."
+        if section_id == "section_skills_alignment":
+            assert (
+                '"content_for_template"' not in template.body
+            ), "Prompt 'section_skills_alignment' must use text instead of content_for_template."

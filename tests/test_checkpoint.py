@@ -44,6 +44,8 @@ def test_load_checkpoint_migrates_v1_score_field() -> None:
     loaded = load_checkpoint(checkpoint_path)
     migrated = loaded.section_states[section_id].variations[0]
     assert migrated.score_0_to_100 == 80
+    assert loaded.state_version == "1.2"
+    assert loaded.section_states[section_id].ai_outputs == []
 
 
 def test_save_checkpoint_wraps_os_errors(monkeypatch: pytest.MonkeyPatch) -> None:

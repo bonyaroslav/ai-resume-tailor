@@ -14,6 +14,8 @@ from settings import default_offline_fixtures_path_for_role, resolve_role_name
 from section_ids import is_experience_section
 from workflow_definition import TRIAGE_SECTION_ID
 
+SKILLS_SECTION_ID = "section_skills_alignment"
+
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
 LLM_MAX_429_ATTEMPTS_ENV = "ART_LLM_MAX_429_ATTEMPTS"
@@ -298,6 +300,54 @@ def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
                 }
             },
             "required": ["bullets"],
+        }
+
+    if section_id == SKILLS_SECTION_ID:
+        return {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "type": "object",
+                    "properties": {
+                        "jd_top_keywords": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "covered_keywords": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "missing_keywords_not_in_matrix": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": [
+                        "jd_top_keywords",
+                        "covered_keywords",
+                        "missing_keywords_not_in_matrix",
+                    ],
+                },
+                "variations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "score_0_to_100": {"type": "integer"},
+                            "ai_reasoning": {"type": "string"},
+                            "text": {"type": "string"},
+                        },
+                        "required": [
+                            "id",
+                            "score_0_to_100",
+                            "ai_reasoning",
+                            "text",
+                        ],
+                    },
+                },
+            },
+            "required": ["meta", "variations"],
         }
 
     return {

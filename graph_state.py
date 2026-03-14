@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from workflow_definition import WORKFLOW_SECTION_IDS
 
-STATE_VERSION = "1.1"
+STATE_VERSION = "1.2"
 
 
 def utc_now_iso() -> str:
@@ -21,6 +21,17 @@ class Variation(BaseModel):
     score_0_to_100: int = Field(ge=0, le=100)
     ai_reasoning: str
     content_for_template: str
+
+
+class AiOutputRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attempt: int = Field(ge=1)
+    status: Literal["parsed", "parse_error", "schema_error"]
+    raw_response: str
+    parsed_payload: dict[str, object] | None = None
+    normalized_payload: dict[str, object] | None = None
+    error_detail: str | None = None
 
 
 class ResponseEnvelope(BaseModel):
@@ -90,6 +101,7 @@ class SectionState(BaseModel):
     selected_content: str | None = None
     user_note: str | None = None
     retry_count: int = 0
+    ai_outputs: list[AiOutputRecord] = Field(default_factory=list)
 
 
 class GraphState(BaseModel):

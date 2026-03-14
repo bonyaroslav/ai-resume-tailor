@@ -40,14 +40,29 @@ def _migrate_state_v1_0_to_v1_1(data: dict[str, object]) -> dict[str, object]:
     return data
 
 
+def _migrate_state_v1_1_to_v1_2(data: dict[str, object]) -> dict[str, object]:
+    section_states = data.get("section_states")
+    if isinstance(section_states, dict):
+        for section_state in section_states.values():
+            if not isinstance(section_state, dict):
+                continue
+            ai_outputs = section_state.get("ai_outputs")
+            if not isinstance(ai_outputs, list):
+                section_state["ai_outputs"] = []
+    data["state_version"] = "1.2"
+    return data
+
+
 def _migrate_checkpoint_data(data: dict[str, object]) -> dict[str, object]:
     version = data.get("state_version")
-    if version == "1.1":
+    if version == "1.2":
         return data
+    if version == "1.1":
+        return _migrate_state_v1_1_to_v1_2(data)
     if version == "1.0":
-        return _migrate_state_v1_0_to_v1_1(data)
+        return _migrate_state_v1_1_to_v1_2(_migrate_state_v1_0_to_v1_1(data))
     raise CheckpointError(
-        f"Unsupported checkpoint state_version '{version}'. Expected '1.1'."
+        f"Unsupported checkpoint state_version '{version}'. Expected '1.2'."
     )
 
 

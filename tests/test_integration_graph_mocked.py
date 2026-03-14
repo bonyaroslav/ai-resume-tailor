@@ -117,6 +117,31 @@ def _fake_response_for_section(section_id: str) -> str:
             }
         )
 
+    if section_id == "section_skills_alignment":
+        return json.dumps(
+            {
+                "meta": {
+                    "jd_top_keywords": ["python", "sql"],
+                    "covered_keywords": ["python", "sql"],
+                    "missing_keywords_not_in_matrix": [],
+                },
+                "variations": [
+                    {
+                        "id": "A",
+                        "score_0_to_100": 95,
+                        "ai_reasoning": f"Reason for {section_id}",
+                        "text": f"Approved content for {section_id}",
+                    },
+                    {
+                        "id": "B",
+                        "score_0_to_100": 91,
+                        "ai_reasoning": "Fallback",
+                        "text": f"Fallback content for {section_id}",
+                    },
+                ],
+            }
+        )
+
     envelope = {
         "variations": [
             {
@@ -200,6 +225,10 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert context.output_cover_letter_path.exists()
     checkpoint_state = load_checkpoint(context.checkpoint_path)
     assert checkpoint_state.status == "completed"
+    assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs
+    assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs[
+        0
+    ].parsed_payload["meta"]["covered_keywords"] == ["python", "sql"]
 
     rendered = Document(str(context.output_cv_path))
     output_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
