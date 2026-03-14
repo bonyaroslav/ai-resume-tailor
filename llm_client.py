@@ -15,6 +15,7 @@ from section_ids import is_experience_section
 from workflow_definition import TRIAGE_SECTION_ID
 
 SKILLS_SECTION_ID = "section_skills_alignment"
+DEFAULT_SKILLS_CATEGORY_COUNT = 4
 
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 OFFLINE_FIXTURES_PATH_ENV = "ART_OFFLINE_FIXTURES_PATH"
@@ -166,7 +167,10 @@ def _extract_usage_metadata(response: Any) -> UsageMetadata:
     )
 
 
-def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
+def _response_json_schema(
+    section_id: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
+) -> dict[str, Any]:
     if section_id == TRIAGE_SECTION_ID:
         return {
             "type": "object",
@@ -336,13 +340,28 @@ def _response_json_schema(section_id: str | None = None) -> dict[str, Any]:
                             "id": {"type": "string"},
                             "score_0_to_100": {"type": "integer"},
                             "ai_reasoning": {"type": "string"},
-                            "text": {"type": "string"},
+                            "categories": {
+                                "type": "array",
+                                "minItems": skills_category_count,
+                                "maxItems": skills_category_count,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "category_name": {"type": "string"},
+                                        "category_text": {"type": "string"},
+                                    },
+                                    "required": [
+                                        "category_name",
+                                        "category_text",
+                                    ],
+                                },
+                            },
                         },
                         "required": [
                             "id",
                             "score_0_to_100",
                             "ai_reasoning",
-                            "text",
+                            "categories",
                         ],
                     },
                 },
@@ -381,10 +400,14 @@ def _response_config(
     include_schema: bool,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> dict[str, Any]:
     config: dict[str, Any] = {"response_mime_type": "application/json"}
     if include_schema:
-        config["response_json_schema"] = _response_json_schema(section_id)
+        config["response_json_schema"] = _response_json_schema(
+            section_id,
+            skills_category_count=skills_category_count,
+        )
     if cached_content_name:
         config["cached_content"] = cached_content_name
     return config
@@ -577,6 +600,7 @@ def _request_content_with_backoff(
     include_schema: bool,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> Any:
     logger = logging.getLogger("ai_resume_tailor")
     max_attempts = _max_429_attempts()
@@ -593,6 +617,7 @@ def _request_content_with_backoff(
                 include_schema=include_schema,
                 section_id=section_id,
                 cached_content_name=cached_content_name,
+                skills_category_count=skills_category_count,
             )
         except Exception as exc:
             status_code = _status_code_from_exception(exc)
@@ -658,6 +683,7 @@ def _request_content(
     include_schema: bool,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> Any:
     return client.models.generate_content(
         model=model,
@@ -666,6 +692,7 @@ def _request_content(
             include_schema=include_schema,
             section_id=section_id,
             cached_content_name=cached_content_name,
+            skills_category_count=skills_category_count,
         ),
     )
 
@@ -698,6 +725,7 @@ def _generate_with_fallback(
     model: str,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> LlmGenerationResult:
     try:
         response = _request_content_with_backoff(
@@ -707,6 +735,7 @@ def _generate_with_fallback(
             include_schema=True,
             section_id=section_id,
             cached_content_name=cached_content_name,
+            skills_category_count=skills_category_count,
         )
     except Exception as exc:
         if isinstance(exc, QuotaExceededError):
@@ -723,6 +752,7 @@ def _generate_with_fallback(
                 include_schema=False,
                 section_id=section_id,
                 cached_content_name=cached_content_name,
+                skills_category_count=skills_category_count,
             )
         except Exception as fallback_exc:
             if isinstance(fallback_exc, QuotaExceededError):
@@ -740,6 +770,7 @@ def _generate_sync(
     model: str,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> LlmGenerationResult:
     try:
         from google import genai
@@ -753,6 +784,7 @@ def _generate_sync(
         model=model,
         section_id=section_id,
         cached_content_name=cached_content_name,
+        skills_category_count=skills_category_count,
     )
 
 
@@ -762,6 +794,7 @@ async def generate_with_gemini(
     model: str,
     section_id: str | None = None,
     cached_content_name: str | None = None,
+    skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> LlmGenerationResult:
     if _offline_mode_enabled():
         return _generate_offline(section_id)
@@ -772,4 +805,5 @@ async def generate_with_gemini(
         model,
         section_id,
         cached_content_name,
+        skills_category_count,
     )

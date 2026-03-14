@@ -165,6 +165,7 @@ def build_prompt_text(
     retry_note: str | None = None,
     *,
     inline_knowledge: bool = True,
+    skills_category_count: int | None = None,
 ) -> str:
     prompt_with_context = template.body.strip()
     if inline_knowledge:
@@ -175,6 +176,8 @@ def build_prompt_text(
         "Job Description:",
         job_description,
     ]
+    if skills_category_count is not None:
+        runtime_fields.extend(["", f"Skills Category Count: {skills_category_count}"])
     if retry_note:
         runtime_fields.extend(["", "## User Retry Note", retry_note])
     return "\n\n".join([prompt_with_context, "\n".join(runtime_fields)]).strip()

@@ -20,7 +20,10 @@ SKILLS_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"id"',
     '"score_0_to_100"',
     '"ai_reasoning"',
-    '"text"',
+    '"categories"',
+    '"category_name"',
+    '"category_text"',
+    "category_count",
 )
 
 EXPERIENCE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
@@ -78,4 +81,7 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
         if section_id == "section_skills_alignment":
             assert (
                 '"content_for_template"' not in template.body
-            ), "Prompt 'section_skills_alignment' must use text instead of content_for_template."
+            ), "Prompt 'section_skills_alignment' must not use content_for_template."
+            assert (
+                '"text"' not in template.body
+            ), "Prompt 'section_skills_alignment' must use categories instead of text."

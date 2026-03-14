@@ -14,6 +14,7 @@ from section_ids import is_experience_section
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
 _LEADING_BULLET_PATTERN = re.compile(r"^\s*(?:[-*]+|\d+[.)])\s*")
 _SKILLS_SECTION_ID = "section_skills_alignment"
+_DEFAULT_SKILLS_CATEGORY_COUNT = 4
 
 
 class ResponseParseError(ValueError):
@@ -192,6 +193,108 @@ def _normalize_skills_envelope(parsed: dict[str, object]) -> dict[str, object]:
     return {"variations": normalized_variations}
 
 
+def _validate_skill_category(
+    category: object, *, variation_index: int, category_index: int
+) -> tuple[str, str]:
+    if not isinstance(category, dict):
+        raise ResponseSchemaError(
+            "Skills category must be an object "
+            f"(variation={variation_index}, category={category_index})."
+        )
+
+    category_name = category.get("category_name")
+    category_text = category.get("category_text")
+    if not isinstance(category_name, str) or not category_name.strip():
+        raise ResponseSchemaError(
+            "Skills category.category_name must be a non-empty string "
+            f"(variation={variation_index}, category={category_index})."
+        )
+    if not isinstance(category_text, str) or not category_text.strip():
+        raise ResponseSchemaError(
+            "Skills category.category_text must be a non-empty string "
+            f"(variation={variation_index}, category={category_index})."
+        )
+    return category_name.strip(), category_text.strip()
+
+
+def _normalize_skills_envelope_with_categories(
+    parsed: dict[str, object], *, category_count: int
+) -> dict[str, object]:
+    meta = parsed.get("meta")
+    if not isinstance(meta, dict):
+        raise ResponseSchemaError("Skills payload must contain a meta object.")
+
+    for key in (
+        "jd_top_keywords",
+        "covered_keywords",
+        "missing_keywords_not_in_matrix",
+    ):
+        values = meta.get(key)
+        if not isinstance(values, list) or not all(
+            isinstance(item, str) for item in values
+        ):
+            raise ResponseSchemaError(f"Skills meta.{key} must be an array of strings.")
+
+    variations = parsed.get("variations")
+    if not isinstance(variations, list) or not variations:
+        raise ResponseSchemaError(
+            "Skills payload must contain a non-empty variations array."
+        )
+
+    normalized_variations: list[dict[str, object]] = []
+    for variation_index, variation in enumerate(variations, start=1):
+        if not isinstance(variation, dict):
+            raise ResponseSchemaError(
+                f"Skills variation at index {variation_index} must be an object."
+            )
+        variation_id = variation.get("id")
+        score = variation.get("score_0_to_100")
+        ai_reasoning = variation.get("ai_reasoning")
+        categories = variation.get("categories")
+        if not isinstance(variation_id, str) or not variation_id.strip():
+            raise ResponseSchemaError(
+                f"Skills variation.id must be a non-empty string (variation={variation_index})."
+            )
+        if not isinstance(score, int) or score < 0 or score > 100:
+            raise ResponseSchemaError(
+                "Skills variation.score_0_to_100 must be an integer between 0 and 100 "
+                f"(variation={variation_index})."
+            )
+        if not isinstance(ai_reasoning, str):
+            raise ResponseSchemaError(
+                f"Skills variation.ai_reasoning must be a string (variation={variation_index})."
+            )
+        if not isinstance(categories, list):
+            raise ResponseSchemaError(
+                f"Skills variation.categories must be an array (variation={variation_index})."
+            )
+        if len(categories) != category_count:
+            raise ResponseSchemaError(
+                "Skills variation.categories must contain exactly "
+                f"{category_count} items (variation={variation_index})."
+            )
+
+        category_lines = ["Skills"]
+        for category_index, category in enumerate(categories, start=1):
+            category_name, category_text = _validate_skill_category(
+                category,
+                variation_index=variation_index,
+                category_index=category_index,
+            )
+            category_lines.append(f"{category_name}: {category_text}")
+
+        normalized_variations.append(
+            {
+                "id": variation_id.strip(),
+                "score_0_to_100": score,
+                "ai_reasoning": ai_reasoning,
+                "content_for_template": "\n".join(category_lines),
+            }
+        )
+
+    return {"variations": normalized_variations}
+
+
 def clean_llm_json(raw_text: str) -> str:
     text = raw_text.strip()
     text = text.lstrip("\ufeff")
@@ -283,8 +386,18 @@ def normalize_response_payload(
     parsed: dict[str, object],
     *,
     section_id: str | None = None,
+    skills_category_count: int = _DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> dict[str, object]:
     if section_id == _SKILLS_SECTION_ID:
+        variations = parsed.get("variations")
+        if isinstance(variations, list) and any(
+            isinstance(variation, dict) and "categories" in variation
+            for variation in variations
+        ):
+            return _normalize_skills_envelope_with_categories(
+                parsed,
+                category_count=skills_category_count,
+            )
         return _normalize_skills_envelope(parsed)
     if (
         section_id is not None
@@ -299,10 +412,13 @@ def parse_response_envelope_payload(
     raw_text: str,
     *,
     section_id: str | None = None,
+    skills_category_count: int = _DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> ParsedResponsePayload:
     parsed_payload = parse_response_payload(raw_text)
     normalized_payload = normalize_response_payload(
-        parsed_payload, section_id=section_id
+        parsed_payload,
+        section_id=section_id,
+        skills_category_count=skills_category_count,
     )
     return ParsedResponsePayload(
         parsed_payload=parsed_payload,
@@ -314,8 +430,13 @@ def parse_response_envelope(
     raw_text: str,
     *,
     section_id: str | None = None,
+    skills_category_count: int = _DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> ResponseEnvelope:
-    payload = parse_response_envelope_payload(raw_text, section_id=section_id)
+    payload = parse_response_envelope_payload(
+        raw_text,
+        section_id=section_id,
+        skills_category_count=skills_category_count,
+    )
     try:
         return ResponseEnvelope.model_validate(payload.normalized_payload)
     except ValidationError as exc:

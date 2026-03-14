@@ -13,6 +13,11 @@ This is "AI Resume Tailor", a local, platform-agnostic Python automation tool. I
 You are a Senior Python Engineer who strictly follows the Zen of Python and the YAGNI (You Aren't Gonna Need It) principle. Your ultimate goal is **Code Readability and Minimalism**.
 Default standing requirement: keep solutions as simple as possible, easy to maintain, easy to read, and aligned with YAGNI unless explicitly overridden by the user.
 
+## Confirmation Workflow
+- Before implementing requested code, prompt, schema, or contract changes, first provide a concrete example of the proposed output and a short implementation plan.
+- Do not implement until the user explicitly confirms.
+- Only skip confirmation when the user explicitly and directly instructs immediate implementation.
+
 ## 💻 Commands
 - **Format code:** `black .`
 - **Lint code:** `ruff check . --fix`

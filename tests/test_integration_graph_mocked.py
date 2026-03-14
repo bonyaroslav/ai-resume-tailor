@@ -16,7 +16,6 @@ from prompt_loader import PromptTemplate
 from tests.test_support import make_workspace_temp_dir
 from workflow_definition import (
     GENERATION_SECTION_IDS,
-    TEMPLATE_SECTION_IDS,
     WORKFLOW_SECTION_IDS,
 )
 
@@ -130,13 +129,23 @@ def _fake_response_for_section(section_id: str) -> str:
                         "id": "A",
                         "score_0_to_100": 95,
                         "ai_reasoning": f"Reason for {section_id}",
-                        "text": f"Approved content for {section_id}",
+                        "categories": [
+                            {"category_name": "Languages, core stack", "category_text": "Python, SQL"},
+                            {"category_name": "Cloud, infra", "category_text": "AWS"},
+                            {"category_name": "Testing, quality", "category_text": "pytest"},
+                            {"category_name": "Delivery, tooling", "category_text": "Docker"},
+                        ],
                     },
                     {
                         "id": "B",
                         "score_0_to_100": 91,
                         "ai_reasoning": "Fallback",
-                        "text": f"Fallback content for {section_id}",
+                        "categories": [
+                            {"category_name": "Languages, core stack", "category_text": "Python"},
+                            {"category_name": "Cloud, infra", "category_text": "AWS"},
+                            {"category_name": "Testing, quality", "category_text": "pytest"},
+                            {"category_name": "Delivery, tooling", "category_text": "Docker"},
+                        ],
                     },
                 ],
             }
@@ -197,10 +206,12 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
         model: str,
         section_id: str | None = None,
         cached_content_name: str | None = None,
+        skills_category_count: int = 4,
     ) -> LlmGenerationResult:
         assert api_key == "test-key"
         assert model == "fake-model"
         assert cached_content_name is None
+        assert skills_category_count == 4
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
         return _result(_fake_response_for_section(resolved_section_id))
 
@@ -232,8 +243,14 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
 
     rendered = Document(str(context.output_cv_path))
     output_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
-    for section_id in TEMPLATE_SECTION_IDS:
-        assert f"Approved content for {section_id}" in output_text
+    assert "Approved content for section_professional_summary" in output_text
+    assert (
+        "Skills\nLanguages, core stack: Python, SQL\nCloud, infra: AWS\nTesting, quality: pytest\nDelivery, tooling: Docker"
+        in output_text
+    )
+    assert "Approved content for section_experience_1" in output_text
+    assert "Approved content for section_experience_2" in output_text
+    assert "Approved content for section_experience_3" in output_text
 
     cover_letter = context.output_cover_letter_path.read_text(encoding="utf-8")
     assert "Approved content for doc_cover_letter" in cover_letter
@@ -252,10 +269,12 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
         model: str,
         section_id: str | None = None,
         cached_content_name: str | None = None,
+        skills_category_count: int = 4,
     ) -> LlmGenerationResult:
         assert api_key == "test-key"
         assert model == "fake-model"
         assert cached_content_name is None
+        assert skills_category_count == 4
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
         if resolved_section_id == "triage_job_fit_and_risks":
             return _result(
@@ -341,8 +360,10 @@ def test_run_graph_passes_cached_content_and_skips_inline_knowledge(
         model: str,
         section_id: str | None = None,
         cached_content_name: str | None = None,
+        skills_category_count: int = 4,
     ) -> LlmGenerationResult:
         prompts_seen.append(prompt)
+        assert skills_category_count == 4
         cached_names.append(cached_content_name)
         resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
         return _result(_fake_response_for_section(resolved_section_id), cached_tokens=9)

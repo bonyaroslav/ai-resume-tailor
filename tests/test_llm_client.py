@@ -137,7 +137,7 @@ def test_response_json_schema_for_experience_sections_uses_bullets_shape() -> No
     assert "content_for_template" not in variation_schema["properties"]
 
 
-def test_response_json_schema_for_skills_uses_meta_and_text_shape() -> None:
+def test_response_json_schema_for_skills_uses_meta_and_categories_shape() -> None:
     schema = _response_json_schema("section_skills_alignment")
     assert "additionalProperties" not in schema
     assert schema["required"] == ["meta", "variations"]
@@ -148,7 +148,14 @@ def test_response_json_schema_for_skills_uses_meta_and_text_shape() -> None:
         "missing_keywords_not_in_matrix",
     ]
     variation_schema = schema["properties"]["variations"]["items"]
-    assert "text" in variation_schema["properties"]
+    assert "categories" in variation_schema["properties"]
+    category_schema = variation_schema["properties"]["categories"]
+    assert "text" not in variation_schema["properties"]
+    assert category_schema["minItems"] == 4
+    assert category_schema["maxItems"] == 4
+    category_item_schema = category_schema["items"]
+    assert "category_name" in category_item_schema["properties"]
+    assert "category_text" in category_item_schema["properties"]
     assert "content_for_template" not in variation_schema["properties"]
 
 

@@ -7,7 +7,7 @@ $RunnerConfig = @{
 
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ TheWhiteam.txt"
     CompanyName = "TheWhiteam"
-    TierName = "heavy_model"
+    TierName = "freetier"
     RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.

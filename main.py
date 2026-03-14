@@ -54,6 +54,7 @@ USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV = "ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE"
 REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV = "ART_REQUIRE_CACHED_TOKEN_CONFIRMATION"
 KNOWLEDGE_CACHE_TTL_SECONDS_ENV = "ART_KNOWLEDGE_CACHE_TTL_SECONDS"
 KNOWLEDGE_CACHE_REGISTRY_PATH_ENV = "ART_KNOWLEDGE_CACHE_REGISTRY_PATH"
+DEFAULT_SKILLS_CATEGORY_COUNT = 4
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -68,6 +69,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--role", default=None)
     run_parser.add_argument("--debug", action="store_true")
     run_parser.add_argument("--invalidate-cache", action="store_true")
+    run_parser.add_argument("--skills-category-count", type=int, default=None)
 
     resume_parser = subparsers.add_parser("resume", help="Resume from checkpoint")
     resume_group = resume_parser.add_mutually_exclusive_group(required=True)
@@ -76,6 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_parser.add_argument("--model", default=None)
     resume_parser.add_argument("--role", default=None)
     resume_parser.add_argument("--invalidate-cache", action="store_true")
+    resume_parser.add_argument("--skills-category-count", type=int, default=None)
 
     status_parser = subparsers.add_parser(
         "status", help="Show status summary for a run"
@@ -95,6 +98,7 @@ def _build_parser() -> argparse.ArgumentParser:
     regenerate_parser.add_argument("--model", default=None)
     regenerate_parser.add_argument("--role", default=None)
     regenerate_parser.add_argument("--invalidate-cache", action="store_true")
+    regenerate_parser.add_argument("--skills-category-count", type=int, default=None)
 
     rebuild_parser = subparsers.add_parser(
         "rebuild-output", help="Rebuild CV and cover letter from approved content"
@@ -142,6 +146,21 @@ def _int_env_with_default(value: str | None, *, default: int) -> int:
     except ValueError:
         return default
     return max(1, parsed)
+
+
+def _resolve_skills_category_count(
+    explicit_count: int | None,
+    *,
+    metadata_count: str | None,
+) -> int:
+    if explicit_count is not None:
+        return max(1, explicit_count)
+    if metadata_count:
+        try:
+            return max(1, int(metadata_count.strip()))
+        except ValueError:
+            return DEFAULT_SKILLS_CATEGORY_COUNT
+    return DEFAULT_SKILLS_CATEGORY_COUNT
 
 
 def _knowledge_cache_registry_path() -> Path:
@@ -671,6 +690,7 @@ def _prepare_runtime_context(
     model_name: str,
     role_name: str,
     debug_mode: bool,
+    skills_category_count: int,
 ) -> RuntimeContext:
     prompts_dir = role_prompts_dir(role_name)
     knowledge_dir = role_knowledge_dir(role_name)
@@ -707,6 +727,7 @@ def _prepare_runtime_context(
             os.getenv(REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV),
             default=True,
         ),
+        skills_category_count=skills_category_count,
         cached_content_name=None,
     )
     return context
@@ -761,6 +782,10 @@ async def _handle_run(args: argparse.Namespace) -> None:
     if args.debug:
         debug_mode = True
 
+    skills_category_count = _resolve_skills_category_count(
+        getattr(args, "skills_category_count", None),
+        metadata_count=metadata.get("skills_category_count"),
+    )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata.get("company_name", args.company),
@@ -769,6 +794,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
         model_name=model_name,
         role_name=role_name,
         debug_mode=debug_mode,
+        skills_category_count=skills_category_count,
     )
     _configure_cache_runtime_context(
         context,
@@ -784,6 +810,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
             "model_name": model_name,
             "role_name": role_name,
             "debug_mode": str(debug_mode).lower(),
+            "skills_category_count": str(skills_category_count),
         },
     )
     print(f"Using run folder: {run_dir}")
@@ -825,6 +852,10 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         model_name=model_name,
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
+        skills_category_count=_resolve_skills_category_count(
+            getattr(args, "skills_category_count", None),
+            metadata_count=metadata.get("skills_category_count"),
+        ),
     )
     _configure_cache_runtime_context(
         context,
@@ -883,6 +914,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         model_name=model_name,
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
+        skills_category_count=_resolve_skills_category_count(
+            getattr(args, "skills_category_count", None),
+            metadata_count=metadata.get("skills_category_count"),
+        ),
     )
     _configure_cache_runtime_context(
         context,
@@ -926,6 +961,10 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
         ),
         role_name=role_name,
         debug_mode=metadata.get("debug_mode", "false") == "true",
+        skills_category_count=_resolve_skills_category_count(
+            explicit_count=None,
+            metadata_count=metadata.get("skills_category_count"),
+        ),
     )
     _configure_cache_runtime_context(
         context,

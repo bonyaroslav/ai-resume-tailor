@@ -79,6 +79,7 @@ class RuntimeContext:
     auto_approve_triage: bool
     use_role_wide_knowledge_cache: bool = False
     require_cached_token_confirmation: bool = True
+    skills_category_count: int = 4
     cached_content_name: str | None = None
     invalidate_role_wide_knowledge_cache: bool = False
     knowledge_cache_ttl_seconds: int = 0
@@ -248,6 +249,7 @@ async def _request_llm(
             context.model_name,
             section_id,
             context.cached_content_name,
+            context.skills_category_count,
         )
     )
     while True:
@@ -298,6 +300,11 @@ async def _generate_section_variations(
         job_description=context.job_description,
         retry_note=section_state.user_note,
         inline_knowledge=not context.use_role_wide_knowledge_cache,
+        skills_category_count=(
+            context.skills_category_count
+            if section_id == "section_skills_alignment"
+            else None
+        ),
     )
     render_prompt(section_id, prompt)
 
@@ -341,7 +348,9 @@ async def _generate_section_variations(
 
         try:
             payload = parse_response_envelope_payload(
-                result.text, section_id=section_id
+                result.text,
+                section_id=section_id,
+                skills_category_count=context.skills_category_count,
             )
             envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
         except ResponseSchemaError as exc:

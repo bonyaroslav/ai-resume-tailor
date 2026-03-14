@@ -112,7 +112,12 @@ def test_parse_response_envelope_normalizes_skills_schema_and_preserves_meta() -
       "id": "A",
       "score_0_to_100": 87,
       "ai_reasoning": "Best keyword alignment.",
-      "text": "Skills\\nLanguages: Python, SQL"
+      "categories": [
+        {"category_name": "Languages, core stack", "category_text": "Python, SQL"},
+        {"category_name": "Cloud, infra", "category_text": "AWS"},
+        {"category_name": "Testing, quality", "category_text": "pytest"},
+        {"category_name": "Delivery, tooling", "category_text": "Docker"}
+      ]
     }
   ]
 }
@@ -124,7 +129,11 @@ def test_parse_response_envelope_normalizes_skills_schema_and_preserves_meta() -
 
     assert payload.parsed_payload["meta"]["jd_top_keywords"] == ["python", "aws"]
     assert envelope.variations[0].content_for_template == (
-        "Skills" + "\n" + "Languages: Python, SQL"
+        "Skills\n"
+        "Languages, core stack: Python, SQL\n"
+        "Cloud, infra: AWS\n"
+        "Testing, quality: pytest\n"
+        "Delivery, tooling: Docker"
     )
     assert envelope.variations[0].score_0_to_100 == 87
 
@@ -137,12 +146,43 @@ def test_parse_response_envelope_rejects_skills_payload_without_meta() -> None:
       "id": "A",
       "score_0_to_100": 87,
       "ai_reasoning": "Best keyword alignment.",
-      "text": "Skills\\nLanguages: Python, SQL"
+      "categories": [
+        {"category_name": "Languages, core stack", "category_text": "Python, SQL"},
+        {"category_name": "Cloud, infra", "category_text": "AWS"},
+        {"category_name": "Testing, quality", "category_text": "pytest"},
+        {"category_name": "Delivery, tooling", "category_text": "Docker"}
+      ]
     }
   ]
 }
 """
     with pytest.raises(ResponseSchemaError, match="meta object"):
+        parse_response_envelope(raw, section_id="section_skills_alignment")
+
+
+def test_parse_response_envelope_rejects_wrong_skills_category_count() -> None:
+    raw = """
+{
+  "meta": {
+    "jd_top_keywords": ["python"],
+    "covered_keywords": ["python"],
+    "missing_keywords_not_in_matrix": []
+  },
+  "variations": [
+    {
+      "id": "A",
+      "score_0_to_100": 87,
+      "ai_reasoning": "Best keyword alignment.",
+      "categories": [
+        {"category_name": "Languages, core stack", "category_text": "Python, SQL"},
+        {"category_name": "Cloud, infra", "category_text": "AWS"},
+        {"category_name": "Testing, quality", "category_text": "pytest"}
+      ]
+    }
+  ]
+}
+"""
+    with pytest.raises(ResponseSchemaError, match="exactly 4"):
         parse_response_envelope(raw, section_id="section_skills_alignment")
 
 
