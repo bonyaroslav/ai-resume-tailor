@@ -241,3 +241,4 @@ pytest_cache-files*/
 # Local runner secrets/config
 secrets/
 !secrets/*.example.txt
+.tmp.*

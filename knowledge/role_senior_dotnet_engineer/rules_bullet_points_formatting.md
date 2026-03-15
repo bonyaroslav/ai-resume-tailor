@@ -20,11 +20,9 @@ This module is for general software engineers and should stay universal. Do not 
 
 For each role:
 
-* Recent or highly relevant roles: 4–8 bullets
-* Older or less relevant roles: 2–4 bullets
-* Usually keep each bullet to 1–2 lines
+* Usually keep each variation of bullet to 1–2 sentences
 * Every bullet must be interviewable and factually defensible
-* Prioritize recent, relevant, high-impact accomplishments first
+* Prioritize relevant, high-impact accomplishments first
 
 If the user asks for a short version:
 
@@ -51,7 +49,7 @@ Good bullet shapes:
 * Automated [process], cutting [manual effort/failures/time] by [result]
 * Hardened [area], reducing [risk/errors/incidents] and improving [outcome]
 
-Do not force one punctuation style. Use whatever phrasing is most natural and easiest to scan.
+Do not force one sentence template, but keep punctuation ATS-safe and simple.
 
 ---
 
@@ -144,8 +142,6 @@ Truth rule:
 * If the number is approximate, mark it honestly: ~, approx., over, more than, from X to Y, hours to minutes
 * Never invent precision
 
-This outcome-first, accomplishment-focused style is consistent with current tech resume guidance. ([techinterviewhandbook.org][1])
-
 ---
 
 ## 4) ATS tailoring workflow
@@ -186,7 +182,9 @@ Draft more bullets than needed, then keep the strongest mix:
 * enough variety across systems and results
 * minimal repetition of the same keyword or story
 
-ATS guidance supports mirroring the job description truthfully, using the exact job title when appropriate, and surfacing relevant skills clearly without keyword stuffing. ([Jobscan][3])
+Surface relevant skills clearly without keyword stuffing.
+
+
 
 ---
 
@@ -215,7 +213,12 @@ Use resume formatting that ATS can parse cleanly:
 * standard fonts
 * no tables or decorative layouts inside experience
 * one idea per bullet
-* consistent tense and punctuation
+* consistent past tense, keep in consistent
+
+Use only standard punctuation and bullet characters in final resume text.
+Prefer words over symbolic implication.
+Avoid arrows and decorative symbols such as: →, ⇒, ->, ✓, |, emojis, icon bullets, stars, diamonds, and checkboxes.
+Prefer phrasing like: “resulting in”, “which reduced”, “which improved”, “from X to Y”.
 
 For resume-level alignment:
 
@@ -223,7 +226,10 @@ For resume-level alignment:
 * keep relevant keywords in the skills section and reinforce them in experience bullets
 * prefer familiar section names
 
-These are directly aligned with current ATS-oriented guidance for software engineer resumes. ([techinterviewhandbook.org][1])
+
+When an acronym is important for ATS matching, spell out the full term once and include the acronym in parentheses when natural.
+Example: “Amazon Web Services (AWS)”
+But not such well known words like API.
 
 ---
 
@@ -239,7 +245,7 @@ Avoid:
 * inflated claims you cannot explain
 * filler phrases like “dynamic,” “innovative,” “cross-functional,” “exceeding stakeholder expectations,” unless they are tied to concrete evidence
 
-Use AI only as a drafting aid. Final bullets must be customized, specific, and fact-checked against real work. Recruiters have explicitly complained about generic, buzzword-heavy, inconsistent AI-written resumes. ([Business Insider][2])
+Be carefull and avoid a generic, buzzword-heavy, inconsistent AI-written resumes. 
 
 ---
 
@@ -278,20 +284,18 @@ Examples:
 Before finalizing a bullet, ask:
 
 1. Does it name a real system, component, or process?
-2. Does it show my technical contribution clearly?
-3. Does it include a result or concrete effect?
+2. Does it show my technical contribution clearly? (If no, try to rewrite)
+3. Does it include a result or concrete effect?  (If no, try to rewrite)
 4. Does it match the target role naturally?
-5. Could I explain it confidently in an interview?
+5. Could I explain it confidently in an interview? (If no, try to rewrite)
 6. Is it more specific than a generic AI-generated bullet?
 7. Is it different enough from the other bullets?
-
-If the answer to 2, 3, or 5 is no, rewrite it.
 
 ---
 
 ## 10) Output protocol for bullet generation
 
-When generating bullets for a role:
+When generating variation of bullet for a role as described in main-parent prompt:
 
 1. Read the JD and extract A-rank and B-rank terms
 2. Draft a larger candidate pool
