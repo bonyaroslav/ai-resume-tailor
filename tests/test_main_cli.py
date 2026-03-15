@@ -7,6 +7,7 @@ import pytest
 
 from graph_state import GraphState, SectionState, Variation, create_initial_state
 from main import (
+    _configure_cache_runtime_context,
     _ensure_regenerate_allowed,
     _mark_sections_for_regeneration,
     _normalize_regeneration_note,
@@ -157,3 +158,21 @@ def test_mark_sections_for_regeneration_preserves_ai_outputs() -> None:
     assert updated.selected_content is None
     assert updated.variations == []
     assert len(updated.ai_outputs) == 1
+
+
+def test_configure_cache_runtime_context_prefers_explicit_force_flag() -> None:
+    context = argparse.Namespace(
+        invalidate_role_wide_knowledge_cache=False,
+        force_knowledge_reupload=False,
+        knowledge_cache_ttl_seconds=0,
+        knowledge_cache_registry_path=None,
+    )
+
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=True,
+        force_knowledge_reupload=True,
+    )
+
+    assert context.invalidate_role_wide_knowledge_cache is True
+    assert context.force_knowledge_reupload is True

@@ -258,7 +258,7 @@ python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 
 # Optional: force non-interactive smoke path for triage + review
-# ART_AUTO_APPROVE_TRIAGE=1 ART_AUTO_APPROVE_REVIEW=1 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+# ART_TRIAGE_DECISION_MODE=always_continue ART_AUTO_APPROVE_REVIEW=1 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
 
 # Review current checkpoint state
 python main.py status --run-path ./runs/stripe

@@ -15,6 +15,7 @@ from graph_nodes import (
     node_generate_sections,
     node_review,
     node_triage,
+    resolve_triage_decision_mode,
 )
 from graph_router import route_next_node
 from graph_state import GraphState, SectionState, create_initial_state, touch_state
@@ -48,12 +49,13 @@ LEGACY_DEFAULT_TEMPLATE_PATH = Path(
 )
 DEFAULT_TEMPLATE_PATH = str(default_template_path_for_role(DEFAULT_ROLE_NAME))
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
-AUTO_APPROVE_TRIAGE_ENV = "ART_AUTO_APPROVE_TRIAGE"
+TRIAGE_DECISION_MODE_ENV = "ART_TRIAGE_DECISION_MODE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
 USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV = "ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE"
 REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV = "ART_REQUIRE_CACHED_TOKEN_CONFIRMATION"
 KNOWLEDGE_CACHE_TTL_SECONDS_ENV = "ART_KNOWLEDGE_CACHE_TTL_SECONDS"
 KNOWLEDGE_CACHE_REGISTRY_PATH_ENV = "ART_KNOWLEDGE_CACHE_REGISTRY_PATH"
+FORCE_KNOWLEDGE_REUPLOAD_ENV = "ART_FORCE_KNOWLEDGE_REUPLOAD"
 DEFAULT_SKILLS_CATEGORY_COUNT = 4
 
 
@@ -69,6 +71,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--role", default=None)
     run_parser.add_argument("--debug", action="store_true")
     run_parser.add_argument("--invalidate-cache", action="store_true")
+    run_parser.add_argument("--force-knowledge-reupload", action="store_true")
     run_parser.add_argument("--skills-category-count", type=int, default=None)
 
     resume_parser = subparsers.add_parser("resume", help="Resume from checkpoint")
@@ -78,6 +81,7 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_parser.add_argument("--model", default=None)
     resume_parser.add_argument("--role", default=None)
     resume_parser.add_argument("--invalidate-cache", action="store_true")
+    resume_parser.add_argument("--force-knowledge-reupload", action="store_true")
     resume_parser.add_argument("--skills-category-count", type=int, default=None)
 
     status_parser = subparsers.add_parser(
@@ -98,6 +102,7 @@ def _build_parser() -> argparse.ArgumentParser:
     regenerate_parser.add_argument("--model", default=None)
     regenerate_parser.add_argument("--role", default=None)
     regenerate_parser.add_argument("--invalidate-cache", action="store_true")
+    regenerate_parser.add_argument("--force-knowledge-reupload", action="store_true")
     regenerate_parser.add_argument("--skills-category-count", type=int, default=None)
 
     rebuild_parser = subparsers.add_parser(
@@ -558,6 +563,7 @@ async def _ensure_role_wide_knowledge_cache(
         registry_path=context.knowledge_cache_registry_path,
         ttl_seconds=context.knowledge_cache_ttl_seconds,
         invalidate_cache=context.invalidate_role_wide_knowledge_cache,
+        force_reupload=context.force_knowledge_reupload,
         logger=logger,
     )
     context.cached_content_name = cache.remote_cache_name
@@ -715,9 +721,8 @@ def _prepare_runtime_context(
             os.getenv(AUTO_APPROVE_REVIEW_ENV),
             default=True,
         ),
-        auto_approve_triage=_truthy_env_with_default(
-            os.getenv(AUTO_APPROVE_TRIAGE_ENV),
-            default=False,
+        triage_decision_mode=resolve_triage_decision_mode(
+            os.getenv(TRIAGE_DECISION_MODE_ENV)
         ),
         use_role_wide_knowledge_cache=_truthy_env_with_default(
             os.getenv(USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV),
@@ -734,9 +739,13 @@ def _prepare_runtime_context(
 
 
 def _configure_cache_runtime_context(
-    context: RuntimeContext, *, invalidate_cache: bool
+    context: RuntimeContext, *, invalidate_cache: bool, force_knowledge_reupload: bool
 ) -> None:
     context.invalidate_role_wide_knowledge_cache = invalidate_cache
+    env_force = _truthy_env_with_default(
+        os.getenv(FORCE_KNOWLEDGE_REUPLOAD_ENV), default=False
+    )
+    context.force_knowledge_reupload = force_knowledge_reupload or env_force
     context.knowledge_cache_ttl_seconds = _int_env_with_default(
         os.getenv(KNOWLEDGE_CACHE_TTL_SECONDS_ENV),
         default=DEFAULT_KNOWLEDGE_CACHE_TTL_SECONDS,
@@ -799,6 +808,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
     _configure_cache_runtime_context(
         context,
         invalidate_cache=getattr(args, "invalidate_cache", False),
+        force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
 
     write_run_metadata(
@@ -860,6 +870,7 @@ async def _handle_resume(args: argparse.Namespace) -> None:
     _configure_cache_runtime_context(
         context,
         invalidate_cache=getattr(args, "invalidate_cache", False),
+        force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
@@ -922,6 +933,7 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
     _configure_cache_runtime_context(
         context,
         invalidate_cache=getattr(args, "invalidate_cache", False),
+        force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
@@ -969,6 +981,7 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
     _configure_cache_runtime_context(
         context,
         invalidate_cache=False,
+        force_knowledge_reupload=False,
     )
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)

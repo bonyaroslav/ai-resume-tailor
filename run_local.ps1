@@ -40,7 +40,9 @@ $debugMode = [bool]$RunnerConfig.Debug
 $runHealthCheck = [bool]$RunnerConfig.RunHealthCheck
 $useRoleWideKnowledgeCache = [bool]$RunnerConfig.UseRoleWideKnowledgeCache
 $invalidateRoleWideKnowledgeCache = [bool]$RunnerConfig.InvalidateRoleWideKnowledgeCache
+$forceKnowledgeReupload = [bool]$RunnerConfig.ForceKnowledgeReupload
 $requireCachedTokenConfirmation = [bool]$RunnerConfig.RequireCachedTokenConfirmation
+$triageDecisionMode = [string]$RunnerConfig.TriageDecisionMode
 $knowledgeCacheTtlSeconds = [int]$RunnerConfig.KnowledgeCacheTtlSeconds
 $knowledgeCacheRegistryPath = [string]$RunnerConfig.KnowledgeCacheRegistryPath
 $tierProfiles = $RunnerConfig.TierProfiles
@@ -85,6 +87,14 @@ if (-not [string]::IsNullOrWhiteSpace($manualModelName)) {
 if ([string]::IsNullOrWhiteSpace($modelName)) {
     throw "ModelName is empty after tier resolution. Set TierProfiles.<TierName>.ModelName or RunnerConfig.ModelName."
 }
+$allowedTriageDecisionModes = @("prompt", "follow_ai", "always_continue")
+if (-not [string]::IsNullOrWhiteSpace($triageDecisionMode)) {
+    $normalizedTriageDecisionMode = $triageDecisionMode.Trim().ToLowerInvariant()
+    if ($allowedTriageDecisionModes -notcontains $normalizedTriageDecisionMode) {
+        throw "TriageDecisionMode must be one of: $($allowedTriageDecisionModes -join ', ')"
+    }
+    $triageDecisionMode = $normalizedTriageDecisionMode
+}
 
 $apiKeyRaw = Get-Content -LiteralPath $apiKeyFile -Raw
 if ($null -eq $apiKeyRaw) {
@@ -108,8 +118,9 @@ $env:ART_LLM_MIN_INTERVAL_SECONDS = [string]$tierProfile.MinIntervalSeconds
 $env:ART_LLM_MAX_429_ATTEMPTS = [string]$tierProfile.Max429Attempts
 $env:ART_LLM_BACKOFF_BASE_SECONDS = [string]$tierProfile.BackoffBaseSeconds
 $env:ART_AUTO_APPROVE_REVIEW = "1"
-$env:ART_AUTO_APPROVE_TRIAGE = "0"
+$env:ART_TRIAGE_DECISION_MODE = if ([string]::IsNullOrWhiteSpace($triageDecisionMode)) { "prompt" } else { $triageDecisionMode }
 $env:ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE = if ($useRoleWideKnowledgeCache) { "1" } else { "0" }
+$env:ART_FORCE_KNOWLEDGE_REUPLOAD = if ($forceKnowledgeReupload) { "1" } else { "0" }
 $env:ART_REQUIRE_CACHED_TOKEN_CONFIRMATION = if ($requireCachedTokenConfirmation) { "1" } else { "0" }
 $env:ART_KNOWLEDGE_CACHE_TTL_SECONDS = [string]$knowledgeCacheTtlSeconds
 if (-not [string]::IsNullOrWhiteSpace($knowledgeCacheRegistryPath)) {
@@ -124,8 +135,9 @@ Write-Host "      ART_LLM_MIN_INTERVAL_SECONDS=$env:ART_LLM_MIN_INTERVAL_SECONDS
 Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
 Write-Host "      ART_LLM_BACKOFF_BASE_SECONDS=$env:ART_LLM_BACKOFF_BASE_SECONDS"
 Write-Host "      ART_AUTO_APPROVE_REVIEW=$env:ART_AUTO_APPROVE_REVIEW"
-Write-Host "      ART_AUTO_APPROVE_TRIAGE=$env:ART_AUTO_APPROVE_TRIAGE"
+Write-Host "      ART_TRIAGE_DECISION_MODE=$env:ART_TRIAGE_DECISION_MODE"
 Write-Host "      ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE=$env:ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE"
+Write-Host "      ART_FORCE_KNOWLEDGE_REUPLOAD=$env:ART_FORCE_KNOWLEDGE_REUPLOAD"
 Write-Host "      ART_REQUIRE_CACHED_TOKEN_CONFIRMATION=$env:ART_REQUIRE_CACHED_TOKEN_CONFIRMATION"
 Write-Host "      ART_KNOWLEDGE_CACHE_TTL_SECONDS=$env:ART_KNOWLEDGE_CACHE_TTL_SECONDS"
 if (-not [string]::IsNullOrWhiteSpace($env:ART_KNOWLEDGE_CACHE_REGISTRY_PATH)) {
@@ -151,5 +163,8 @@ if ($debugMode) {
 }
 if ($invalidateRoleWideKnowledgeCache) {
     $runArgs += "--invalidate-cache"
+}
+if ($forceKnowledgeReupload) {
+    $runArgs += "--force-knowledge-reupload"
 }
 & $pythonExe @runArgs

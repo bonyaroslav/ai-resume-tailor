@@ -232,6 +232,8 @@ runs/
 .pytest_tmp/
 pytest-cache-files-*/
 tests/_tmp_pytest_run_*/
+tests/.tmp/
+knowledge/.tmp.driveupload/
 tmp/
 temp/
 .venv/

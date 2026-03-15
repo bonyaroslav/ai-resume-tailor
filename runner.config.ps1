@@ -5,8 +5,8 @@ $RunnerConfig = @{
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ TheWhiteam.txt"
-    CompanyName = "TheWhiteam"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Intetics.txt"
+    CompanyName = "Intetics"
     TierName = "freetier"
     RoleName = "role_senior_dotnet_engineer"
 
@@ -38,7 +38,9 @@ $RunnerConfig = @{
     RunHealthCheck = $true
     UseRoleWideKnowledgeCache = $true
     InvalidateRoleWideKnowledgeCache = $false
+    ForceKnowledgeReupload = $false
     RequireCachedTokenConfirmation = $true
+    TriageDecisionMode = "always_continue"
     KnowledgeCacheTtlSeconds = 3600
     KnowledgeCacheRegistryPath = ".\runs\_cache\role_wide_knowledge_cache_registry.json"
 }

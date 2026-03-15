@@ -65,7 +65,7 @@ Main challenge: CLI review/triage can block on `input()`.
 Recommended V1 strategy:
 - Run generation non-interactively with env defaults from UI:
   - `ART_AUTO_APPROVE_REVIEW=1`
-  - `ART_AUTO_APPROVE_TRIAGE=1`
+  - `ART_TRIAGE_DECISION_MODE=always_continue`
 - Then let UI provide review controls by editing checkpoint and re-running existing commands:
   - Switch selected variation (A/B/C) per section.
   - Edit final selected text.
@@ -369,4 +369,3 @@ Suggested endpoints/services:
 - User can view colorful logs.
 - User can trigger next actions with buttons.
 - Model help modal shows prices/interval notes from your MD sheet.
-

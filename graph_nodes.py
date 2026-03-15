@@ -56,6 +56,14 @@ GENERATION_MODE_SEQUENTIAL = "sequential"
 GENERATION_MODE_CONCURRENT = "concurrent"
 REVIEW_STEP_DELIMITER = "=" * 72
 REVIEW_SUB_DELIMITER = "-" * 72
+TRIAGE_DECISION_MODE_PROMPT = "prompt"
+TRIAGE_DECISION_MODE_FOLLOW_AI = "follow_ai"
+TRIAGE_DECISION_MODE_ALWAYS_CONTINUE = "always_continue"
+TRIAGE_DECISION_MODES = {
+    TRIAGE_DECISION_MODE_PROMPT,
+    TRIAGE_DECISION_MODE_FOLLOW_AI,
+    TRIAGE_DECISION_MODE_ALWAYS_CONTINUE,
+}
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -76,12 +84,13 @@ class RuntimeContext:
     prompt_templates: dict[str, PromptTemplate]
     debug_mode: bool
     auto_approve_review: bool
-    auto_approve_triage: bool
+    triage_decision_mode: str
     use_role_wide_knowledge_cache: bool = False
     require_cached_token_confirmation: bool = True
     skills_category_count: int = 4
     cached_content_name: str | None = None
     invalidate_role_wide_knowledge_cache: bool = False
+    force_knowledge_reupload: bool = False
     knowledge_cache_ttl_seconds: int = 0
     knowledge_cache_registry_path: Path | None = None
 
@@ -110,6 +119,15 @@ def _normalize_triage_action(raw_action: str) -> str:
     }
     action = raw_action.strip().lower()
     return aliases.get(action, action)
+
+
+def resolve_triage_decision_mode(value: str | None) -> str:
+    if value is None:
+        return TRIAGE_DECISION_MODE_PROMPT
+    normalized = value.strip().lower()
+    if normalized in TRIAGE_DECISION_MODES:
+        return normalized
+    return TRIAGE_DECISION_MODE_PROMPT
 
 
 def _prompt_triage_confirmation(*, suggested_action: str) -> str:
@@ -543,9 +561,18 @@ async def node_triage(
 
     suggested_action = "stop" if triage_result.verdict == "AVOID" else "continue"
     user_action = suggested_action
-    if context.auto_approve_triage:
+    if context.triage_decision_mode == TRIAGE_DECISION_MODE_ALWAYS_CONTINUE:
+        user_action = "continue"
         logger.info(
-            "Auto triage decision enabled. Using suggested_action=%s",
+            "Auto triage decision enabled. mode=%s suggested_action=%s forced_action=%s",
+            context.triage_decision_mode,
+            suggested_action,
+            user_action,
+        )
+    elif context.triage_decision_mode == TRIAGE_DECISION_MODE_FOLLOW_AI:
+        logger.info(
+            "Auto triage decision enabled. mode=%s suggested_action=%s",
+            context.triage_decision_mode,
             suggested_action,
         )
     else:

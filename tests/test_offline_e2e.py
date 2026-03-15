@@ -30,11 +30,14 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
         model=DEFAULT_GEMINI_MODEL,
         role=None,
         debug=False,
+        invalidate_cache=False,
+        force_knowledge_reupload=False,
+        skills_category_count=None,
     )
 
     monkeypatch.setenv("ART_OFFLINE_MODE", "1")
     monkeypatch.setenv("ART_AUTO_APPROVE_REVIEW", "1")
-    monkeypatch.setenv("ART_AUTO_APPROVE_TRIAGE", "1")
+    monkeypatch.setenv("ART_TRIAGE_DECISION_MODE", "always_continue")
     monkeypatch.setattr(main, "create_run_directory", lambda _, __: run_dir)
 
     asyncio.run(main._handle_run(args))

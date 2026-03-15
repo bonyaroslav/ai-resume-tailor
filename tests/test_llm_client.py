@@ -42,6 +42,12 @@ class FakeModels:
         return response
 
 
+def _config_dict(config: object) -> dict[str, object]:
+    if hasattr(config, "model_dump"):
+        return config.model_dump(exclude_none=True)
+    return config  # type: ignore[return-value]
+
+
 def _schema_error() -> FakeClientError:
     return FakeClientError(
         'Unknown name "additional_properties" at "generation_config.response_schema"',
@@ -194,8 +200,12 @@ def test_generate_with_fallback_retries_without_schema() -> None:
 
     assert '"id": "A"' in result.text
     assert len(models.calls) == 2
-    assert models.calls[0]["config"] == _response_config(include_schema=True)
-    assert models.calls[1]["config"] == _response_config(include_schema=False)
+    assert _config_dict(models.calls[0]["config"]) == _response_config(
+        include_schema=True
+    )
+    assert _config_dict(models.calls[1]["config"]) == _response_config(
+        include_schema=False
+    )
 
 
 def test_generate_with_fallback_uses_experience_schema_when_section_set() -> None:
@@ -228,7 +238,7 @@ def test_generate_with_fallback_uses_experience_schema_when_section_set() -> Non
     )
 
     assert len(models.calls) == 1
-    assert models.calls[0]["config"] == _response_config(
+    assert _config_dict(models.calls[0]["config"]) == _response_config(
         include_schema=True,
         section_id="section_experience_2",
     )
@@ -257,7 +267,7 @@ def test_generate_with_fallback_passes_cached_content_name() -> None:
         cached_content_name="cachedContents/123",
     )
 
-    assert models.calls[0]["config"] == _response_config(
+    assert _config_dict(models.calls[0]["config"]) == _response_config(
         include_schema=True,
         cached_content_name="cachedContents/123",
     )

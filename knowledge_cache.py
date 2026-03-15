@@ -210,6 +210,7 @@ def prewarm_role_wide_knowledge_cache(
     registry_path: Path,
     ttl_seconds: int,
     invalidate_cache: bool,
+    force_reupload: bool,
     logger: logging.Logger,
     client_factory: Callable[[str], Any] | None = None,
 ) -> RoleWideKnowledgeCache:
@@ -228,6 +229,7 @@ def prewarm_role_wide_knowledge_cache(
         fingerprint,
         invalidate_cache,
     )
+    logger.info("Knowledge cache upload policy force_reupload=%s", force_reupload)
     for item in knowledge_files:
         logger.info(
             "Knowledge cache file path=%s sha256=%s",
@@ -272,23 +274,24 @@ def prewarm_role_wide_knowledge_cache(
 
     uploaded_records: list[dict[str, Any]] = []
     for item in knowledge_files:
-        reusable_record = _find_reusable_file_record(
-            entries,
-            relative_path=item.relative_path,
-            content_sha256=item.sha256,
-        )
-        if reusable_record is not None:
-            remote_file_name = reusable_record.get("remote_file_name")
-            if isinstance(remote_file_name, str) and remote_file_name:
-                remote_file = _confirm_remote_file(client, remote_file_name)
-                if remote_file is not None:
-                    logger.info(
-                        "Knowledge cache file reuse path=%s remote_file_name=%s",
-                        item.relative_path,
-                        remote_file_name,
-                    )
-                    uploaded_records.append(_build_file_record(item, remote_file))
-                    continue
+        if not force_reupload:
+            reusable_record = _find_reusable_file_record(
+                entries,
+                relative_path=item.relative_path,
+                content_sha256=item.sha256,
+            )
+            if reusable_record is not None:
+                remote_file_name = reusable_record.get("remote_file_name")
+                if isinstance(remote_file_name, str) and remote_file_name:
+                    remote_file = _confirm_remote_file(client, remote_file_name)
+                    if remote_file is not None:
+                        logger.info(
+                            "Knowledge cache file reuse path=%s remote_file_name=%s",
+                            item.relative_path,
+                            remote_file_name,
+                        )
+                        uploaded_records.append(_build_file_record(item, remote_file))
+                        continue
 
         remote_file = client.files.upload(file=str(item.path))
         logger.info(
@@ -300,7 +303,7 @@ def prewarm_role_wide_knowledge_cache(
 
     from google.genai import types
 
-    contents = [
+    parts = [
         types.Part.from_uri(
             file_uri=record["remote_file_uri"],
             mime_type=record.get("mime_type") or "text/markdown",
@@ -312,7 +315,7 @@ def prewarm_role_wide_knowledge_cache(
         model=model_name,
         config=types.CreateCachedContentConfig(
             display_name=display_name,
-            contents=contents,
+            contents=[types.Content(role="user", parts=parts)],
             ttl=f"{ttl_seconds}s",
         ),
     )

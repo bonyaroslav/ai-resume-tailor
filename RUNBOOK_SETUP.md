@@ -110,7 +110,7 @@ Run this sequence for a complete workflow: triage decision -> auto generation ->
 .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
 
 # Optional non-interactive path (auto triage + auto review)
-# $env:ART_AUTO_APPROVE_TRIAGE="1"
+# $env:ART_TRIAGE_DECISION_MODE="always_continue"
 # $env:ART_AUTO_APPROVE_REVIEW="1"
 # .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
 

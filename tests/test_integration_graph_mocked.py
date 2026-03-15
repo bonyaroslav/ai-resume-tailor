@@ -57,7 +57,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         prompt_templates=_build_prompt_templates(run_dir),
         debug_mode=False,
         auto_approve_review=False,
-        auto_approve_triage=False,
+        triage_decision_mode="prompt",
     )
     context.knowledge_cache_registry_path = run_dir / "cache-registry.json"
     context.knowledge_cache_ttl_seconds = 3600
@@ -130,10 +130,19 @@ def _fake_response_for_section(section_id: str) -> str:
                         "score_0_to_100": 95,
                         "ai_reasoning": f"Reason for {section_id}",
                         "categories": [
-                            {"category_name": "Languages, core stack", "category_text": "Python, SQL"},
+                            {
+                                "category_name": "Languages, core stack",
+                                "category_text": "Python, SQL",
+                            },
                             {"category_name": "Cloud, infra", "category_text": "AWS"},
-                            {"category_name": "Testing, quality", "category_text": "pytest"},
-                            {"category_name": "Delivery, tooling", "category_text": "Docker"},
+                            {
+                                "category_name": "Testing, quality",
+                                "category_text": "pytest",
+                            },
+                            {
+                                "category_name": "Delivery, tooling",
+                                "category_text": "Docker",
+                            },
                         ],
                     },
                     {
@@ -141,10 +150,19 @@ def _fake_response_for_section(section_id: str) -> str:
                         "score_0_to_100": 91,
                         "ai_reasoning": "Fallback",
                         "categories": [
-                            {"category_name": "Languages, core stack", "category_text": "Python"},
+                            {
+                                "category_name": "Languages, core stack",
+                                "category_text": "Python",
+                            },
                             {"category_name": "Cloud, infra", "category_text": "AWS"},
-                            {"category_name": "Testing, quality", "category_text": "pytest"},
-                            {"category_name": "Delivery, tooling", "category_text": "Docker"},
+                            {
+                                "category_name": "Testing, quality",
+                                "category_text": "pytest",
+                            },
+                            {
+                                "category_name": "Delivery, tooling",
+                                "category_text": "Docker",
+                            },
                         ],
                     },
                 ],
@@ -331,6 +349,84 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
     assert final_state.current_node == "triage_stop"
     assert not context.output_cv_path.exists()
     assert not context.output_cover_letter_path.exists()
+
+
+def test_run_graph_always_continue_ignores_avoid_triage(monkeypatch: object) -> None:
+    run_dir = make_workspace_temp_dir("integration-mocked-triage-always-continue")
+    template_path = run_dir / "template.docx"
+    _make_template(template_path)
+    context = _build_runtime_context(run_dir, template_path)
+    context.triage_decision_mode = "always_continue"
+    context.auto_approve_review = True
+    state: GraphState = create_initial_state("integration-run-4")
+
+    async def fake_generate_with_gemini(
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+        skills_category_count: int = 4,
+    ) -> LlmGenerationResult:
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        if resolved_section_id == "triage_job_fit_and_risks":
+            return _result(
+                json.dumps(
+                    {
+                        "triage_result": {
+                            "verdict": "AVOID",
+                            "decision_score_0_to_100": 20,
+                            "confidence_0_to_100": 80,
+                            "summary": "Avoid.",
+                            "raw_subscores": {
+                                "technical_fit_0_to_35": 10,
+                                "company_risk_0_to_20": 3,
+                                "role_quality_0_to_15": 3,
+                                "spain_entity_compat_0_to_20": 1,
+                                "evidence_quality_0_to_10": 3,
+                            },
+                            "top_reasons": ["Reason 1", "Reason 2", "Reason 3"],
+                            "key_risks": [
+                                {
+                                    "risk": "High risk",
+                                    "severity": "high",
+                                    "type": "legal_blocker",
+                                    "mitigation": "Mitigate",
+                                }
+                            ],
+                            "spain_entity_risk": {
+                                "status": "YES",
+                                "confidence_0_to_100": 90,
+                                "explanation": "Blocked.",
+                                "recruiter_questions": ["Q1", "Q2", "Q3"],
+                            },
+                            "sources": [
+                                {
+                                    "label": "Policy",
+                                    "url": "https://example.com/policy",
+                                    "evidence_grade": "A",
+                                    "used_for": "Risk",
+                                }
+                            ],
+                            "report_markdown": "### Final Verdict\nAvoid.",
+                        }
+                    }
+                )
+            )
+        return _result(_fake_response_for_section(resolved_section_id))
+
+    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda _: (_ for _ in ()).throw(AssertionError("input should not be called")),
+    )
+
+    final_state = asyncio.run(_run_graph(state, context))
+
+    assert final_state.status == "completed"
+    assert final_state.current_node == "completed"
+    assert context.output_cv_path.exists()
+    assert context.output_cover_letter_path.exists()
 
 
 def test_run_graph_passes_cached_content_and_skips_inline_knowledge(

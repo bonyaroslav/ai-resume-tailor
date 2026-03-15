@@ -685,14 +685,18 @@ def _request_content(
     cached_content_name: str | None = None,
     skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> Any:
+    from google.genai import types
+
     return client.models.generate_content(
         model=model,
         contents=prompt,
-        config=_response_config(
-            include_schema=include_schema,
-            section_id=section_id,
-            cached_content_name=cached_content_name,
-            skills_category_count=skills_category_count,
+        config=types.GenerateContentConfig(
+            **_response_config(
+                include_schema=include_schema,
+                section_id=section_id,
+                cached_content_name=cached_content_name,
+                skills_category_count=skills_category_count,
+            )
         ),
     )
 
