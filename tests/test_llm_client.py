@@ -273,6 +273,26 @@ def test_generate_with_fallback_passes_cached_content_name() -> None:
     )
 
 
+def test_generate_with_fallback_uses_markdown_contract_for_audit() -> None:
+    response = SimpleNamespace(text="# Deep Dive CV Audit\n\n## Executive Summary\nok")
+    models = FakeModels([response])
+    client = SimpleNamespace(models=models)
+
+    result = _generate_with_fallback(
+        client,
+        prompt="prompt",
+        model="gemini-test",
+        section_id="audit_cv_deep_dive",
+    )
+
+    assert result.text.startswith("# Deep Dive CV Audit")
+    assert len(models.calls) == 1
+    assert _config_dict(models.calls[0]["config"]) == _response_config(
+        include_schema=False,
+        section_id="audit_cv_deep_dive",
+    )
+
+
 def test_generate_with_fallback_extracts_usage_metadata() -> None:
     response = SimpleNamespace(
         parsed={

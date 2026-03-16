@@ -208,17 +208,17 @@ def _fake_response_for_section(section_id: str) -> str:
         )
 
     if section_id == "audit_cv_deep_dive":
-        return json.dumps(
-            {
-                "variations": [
-                    {
-                        "id": "A",
-                        "score_0_to_100": 100,
-                        "ai_reasoning": "Grounded audit",
-                        "content_for_template": "# Deep Dive CV Audit\n\n## ATS Match Rate\nEstimated match: 84%\n",
-                    }
-                ]
-            }
+        return (
+            "# Deep Dive CV Audit\n\n"
+            "## Executive Summary\nStrong fit with under-signalled evidence.\n\n"
+            "## ATS Match Rate\nEstimated match: 84%\n\n"
+            "## Keyword Gap Analysis\n- .NET 8: under-represented\n\n"
+            "## Hiring Manager Read\nStrongest reason: relevant backend depth.\n\n"
+            "## Section-by-Section Critique\n### Professional Summary\nNeeds sharper positioning.\n\n"
+            "## Evidence Gaps\n- Metrics are too thin in recent experience.\n\n"
+            "## Prioritized Fixes\n1. Strengthen summary fit.\n\n"
+            "## Rewrite Directions\nBefore: generic summary\nBetter direction: role-aligned summary.\n\n"
+            "## Final Verdict\nCompetitive, but needs stronger signaling.\n"
         )
     envelope = {
         "variations": [

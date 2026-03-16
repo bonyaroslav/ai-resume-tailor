@@ -47,7 +47,7 @@ from workflow_definition import (
 )
 
 LEGACY_DEFAULT_TEMPLATE_PATH = Path(
-    "knowledge/Default Template - Senior Software Engineer.docx"
+    "knowledge/Template - YB Senior Software Engineer.docx"
 )
 DEFAULT_TEMPLATE_PATH = str(default_template_path_for_role(DEFAULT_ROLE_NAME))
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"

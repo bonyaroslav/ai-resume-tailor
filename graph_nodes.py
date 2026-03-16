@@ -66,6 +66,18 @@ TRIAGE_DECISION_MODES = {
     TRIAGE_DECISION_MODE_FOLLOW_AI,
     TRIAGE_DECISION_MODE_ALWAYS_CONTINUE,
 }
+AUDIT_REQUIRED_HEADINGS: tuple[str, ...] = (
+    "# Deep Dive CV Audit",
+    "## Executive Summary",
+    "## ATS Match Rate",
+    "## Keyword Gap Analysis",
+    "## Hiring Manager Read",
+    "## Section-by-Section Critique",
+    "## Evidence Gaps",
+    "## Prioritized Fixes",
+    "## Rewrite Directions",
+    "## Final Verdict",
+)
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -462,6 +474,24 @@ def _write_debug_response(
     debug_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{section_id}.attempt_{attempt + 1}.raw_response.txt"
     (debug_dir / filename).write_text(raw_response, encoding="utf-8")
+
+
+def _validate_audit_markdown(markdown: str) -> str:
+    normalized = markdown.strip()
+    if not normalized:
+        raise ResponseSchemaError("Audit response is empty.")
+    if not normalized.startswith("#"):
+        raise ResponseSchemaError("Audit response must start with a Markdown heading.")
+
+    missing_headings = [
+        heading for heading in AUDIT_REQUIRED_HEADINGS if heading not in normalized
+    ]
+    if missing_headings:
+        missing = ", ".join(missing_headings)
+        raise ResponseSchemaError(
+            f"Audit response is missing required headings: {missing}."
+        )
+    return normalized
 
 
 async def _generate_triage_result(
@@ -1033,29 +1063,20 @@ async def node_audit(
         _write_debug_response(context.run_dir, AUDIT_SECTION_ID, 0, result.text)
 
     output_attempt = _next_ai_output_attempt(section_state)
-    parsed_payload = parse_response_payload(result.text)
-    payload = parse_response_envelope_payload(result.text, section_id=AUDIT_SECTION_ID)
-    envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
-    if not envelope.variations:
-        raise ResponseSchemaError("Audit envelope contains no variations.")
+    audit_markdown = _validate_audit_markdown(result.text)
 
     section_state.ai_outputs.append(
         AiOutputRecord(
             attempt=output_attempt,
             status="parsed",
             raw_response=result.text,
-            parsed_payload=parsed_payload,
-            normalized_payload=payload.normalized_payload,
         )
     )
-    selected = _best_variation(envelope.variations)
-    section_state.variations = envelope.variations
-    section_state.selected_variation_id = selected.id
-    section_state.selected_content = selected.content_for_template
+    section_state.variations = []
+    section_state.selected_variation_id = None
+    section_state.selected_content = audit_markdown
     section_state.status = "approved"
-    context.output_audit_path.write_text(
-        selected.content_for_template.strip() + "\n", encoding="utf-8"
-    )
+    context.output_audit_path.write_text(audit_markdown + "\n", encoding="utf-8")
     logger.info("Generated CV audit: %s", context.output_audit_path)
     state.current_node = "completed"
     state.status = "completed"

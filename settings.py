@@ -9,7 +9,7 @@ OUTPUT_CV_FILENAME_ENV = "ART_OUTPUT_CV_FILENAME"
 DEFAULT_OUTPUT_CV_FILENAME = "tailored_cv.docx"
 ROLE_NAME_ENV = "ART_ROLE"
 DEFAULT_ROLE_NAME = "role_senior_dotnet_engineer"
-DEFAULT_TEMPLATE_FILENAME = "Default Template - Senior Software Engineer.docx"
+DEFAULT_TEMPLATE_FILENAME = "Template - YB Senior Software Engineer.docx"
 DEFAULT_OFFLINE_FIXTURES_FILENAME = "offline_responses.example.json"
 
 

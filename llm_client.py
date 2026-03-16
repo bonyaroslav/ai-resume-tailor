@@ -12,7 +12,7 @@ from typing import Any
 
 from settings import default_offline_fixtures_path_for_role, resolve_role_name
 from section_ids import is_experience_section
-from workflow_definition import TRIAGE_SECTION_ID
+from workflow_definition import AUDIT_SECTION_ID, TRIAGE_SECTION_ID
 
 SKILLS_SECTION_ID = "section_skills_alignment"
 DEFAULT_SKILLS_CATEGORY_COUNT = 4
@@ -93,7 +93,7 @@ def _offline_mode_enabled() -> bool:
     return _is_truthy_env(os.getenv(OFFLINE_MODE_ENV))
 
 
-def _load_offline_fixtures() -> dict[str, dict[str, Any]]:
+def _load_offline_fixtures() -> dict[str, Any]:
     configured = os.getenv(OFFLINE_FIXTURES_PATH_ENV, "").strip()
     path = Path(configured) if configured else _default_offline_fixtures_path()
     try:
@@ -127,7 +127,13 @@ def _generate_offline(section_id: str | None) -> LlmGenerationResult:
         raise LlmClientError(
             f"Missing offline fixture payload for section_id '{section_id}'."
         )
+    if isinstance(payload, str):
+        return LlmGenerationResult(text=payload, usage_metadata=UsageMetadata())
     return LlmGenerationResult(text=json.dumps(payload), usage_metadata=UsageMetadata())
+
+
+def _uses_markdown_contract(section_id: str | None) -> bool:
+    return section_id == AUDIT_SECTION_ID
 
 
 def _extract_text(response: Any) -> str:
@@ -402,7 +408,13 @@ def _response_config(
     cached_content_name: str | None = None,
     skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> dict[str, Any]:
-    config: dict[str, Any] = {"response_mime_type": "application/json"}
+    if _uses_markdown_contract(section_id):
+        config: dict[str, Any] = {"response_mime_type": "text/plain"}
+        if cached_content_name:
+            config["cached_content"] = cached_content_name
+        return config
+
+    config = {"response_mime_type": "application/json"}
     if include_schema:
         config["response_json_schema"] = _response_json_schema(
             section_id,
@@ -731,6 +743,25 @@ def _generate_with_fallback(
     cached_content_name: str | None = None,
     skills_category_count: int = DEFAULT_SKILLS_CATEGORY_COUNT,
 ) -> LlmGenerationResult:
+    if _uses_markdown_contract(section_id):
+        try:
+            response = _request_content_with_backoff(
+                client,
+                prompt=prompt,
+                model=model,
+                include_schema=False,
+                section_id=section_id,
+                cached_content_name=cached_content_name,
+                skills_category_count=skills_category_count,
+            )
+        except Exception as exc:
+            if isinstance(exc, QuotaExceededError):
+                raise
+            raise LlmClientError(
+                f"Gemini request failed: {_extract_api_error_detail(exc)}"
+            ) from exc
+        return _response_to_text(response)
+
     try:
         response = _request_content_with_backoff(
             client,

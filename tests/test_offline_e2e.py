@@ -80,6 +80,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
 
     audit_text = audit_path.read_text(encoding="utf-8")
     assert "# Deep Dive CV Audit" in audit_text
+    assert "## Prioritized Fixes" in audit_text
 
     log_text = log_path.read_text(encoding="utf-8")
     assert "Run finished with status=completed." in log_text

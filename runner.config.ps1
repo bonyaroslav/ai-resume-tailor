@@ -9,7 +9,7 @@ $RunnerConfig = @{
     CompanyName = "Mindera."
     JobTitle = "NET_Generative_AI"
     OutputCvFileName = "tailored_cv.docx"
-    TierName = "heavy_model"
+    TierName = "model_flash"
     RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.
@@ -22,10 +22,17 @@ $RunnerConfig = @{
             ModelName = "gemini-2.5-flash"
             GenerationMode = "sequential"
             MinIntervalSeconds = "15"
-            Max429Attempts = "2"
+            Max429Attempts = "5"
             BackoffBaseSeconds = "2"
         }
-        heavy_model = @{
+        model_flash = @{
+            ModelName = "gemini-2.5-flash"
+            GenerationMode = "concurrent"
+            MinIntervalSeconds = "1"
+            Max429Attempts = "4"
+            BackoffBaseSeconds = "1"
+        }   
+        model_heavy = @{
             ModelName = "gemini-2.5-pro"
             GenerationMode = "concurrent"
             MinIntervalSeconds = "1"

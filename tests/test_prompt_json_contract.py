@@ -51,6 +51,19 @@ TRIAGE_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"report_markdown"',
 )
 
+AUDIT_REQUIRED_MARKDOWN_HEADINGS: tuple[str, ...] = (
+    "# Deep Dive CV Audit",
+    "## Executive Summary",
+    "## ATS Match Rate",
+    "## Keyword Gap Analysis",
+    "## Hiring Manager Read",
+    "## Section-by-Section Critique",
+    "## Evidence Gaps",
+    "## Prioritized Fixes",
+    "## Rewrite Directions",
+    "## Final Verdict",
+)
+
 
 def test_active_prompts_keep_universal_json_envelope_contract() -> None:
     templates = discover_prompt_templates(
@@ -59,6 +72,19 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
     )
 
     for section_id, template in templates.items():
+        if section_id == "audit_cv_deep_dive":
+            for heading in AUDIT_REQUIRED_MARKDOWN_HEADINGS:
+                assert (
+                    heading in template.body
+                ), f"Prompt '{section_id}' is missing required Markdown heading {heading}."
+            assert (
+                "Do not return JSON." in template.body
+            ), "Prompt 'audit_cv_deep_dive' must explicitly request Markdown output."
+            assert (
+                '"variations"' not in template.body
+            ), "Prompt 'audit_cv_deep_dive' must not require the JSON variations envelope."
+            continue
+
         required_keys = DEFAULT_REQUIRED_JSON_SCHEMA_KEYS
         if section_id == "triage_job_fit_and_risks":
             required_keys = TRIAGE_REQUIRED_JSON_SCHEMA_KEYS
