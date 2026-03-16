@@ -16,8 +16,9 @@ from console_ui import (
 )
 from document_builder import (
     assemble_cv_document,
+    extract_docx_text,
     preflight_template,
-    write_cover_letter,
+    write_cover_letters_markdown,
 )
 from graph_state import (
     AiOutputRecord,
@@ -39,6 +40,7 @@ from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_ge
 from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
 from workflow_definition import (
+    AUDIT_SECTION_ID,
     COVER_LETTER_SECTION_ID,
     GENERATION_SECTION_IDS,
     TEMPLATE_SECTION_IDS,
@@ -75,7 +77,8 @@ class RuntimeContext:
     checkpoint_path: Path
     template_path: Path
     output_cv_path: Path
-    output_cover_letter_path: Path
+    output_cover_letters_path: Path
+    output_audit_path: Path
     company_name: str
     job_description_path: Path
     job_description: str
@@ -111,6 +114,13 @@ def _best_variation(variations: list[Variation]) -> Variation:
         key=lambda variation: (-variation.score_0_to_100, variation.id),
     )
     return ranked[0]
+
+
+def _sorted_variations(variations: list[Variation]) -> list[Variation]:
+    return sorted(
+        variations,
+        key=lambda variation: (-variation.score_0_to_100, variation.id),
+    )
 
 
 def _normalize_triage_action(raw_action: str) -> str:
@@ -413,6 +423,20 @@ async def _generate_section_variations(
                 attempt=attempt + 1,
                 retry_count=section_state.retry_count,
                 detail="Envelope contains no variations.",
+            )
+            continue
+        if section_id == COVER_LETTER_SECTION_ID and len(envelope.variations) != 4:
+            last_error = ResponseSchemaError(
+                "Cover letter envelope must contain exactly 4 variations."
+            )
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail="Cover letter envelope must contain exactly 4 variations.",
             )
             continue
         render_variations(section_id, envelope.variations)
@@ -947,6 +971,7 @@ def node_assemble(
     cover_letter_content = state.section_states[
         COVER_LETTER_SECTION_ID
     ].selected_content
+    cover_letter_variations = state.section_states[COVER_LETTER_SECTION_ID].variations
     if not cover_letter_content:
         log_failure(
             logger,
@@ -957,10 +982,81 @@ def node_assemble(
             detail="Missing approved content for doc_cover_letter.",
         )
         raise ValueError("Missing approved content for doc_cover_letter.")
-    write_cover_letter(context.output_cover_letter_path, cover_letter_content)
+    write_cover_letters_markdown(
+        context.output_cover_letters_path,
+        selected_content=cover_letter_content,
+        variations=[
+            {
+                "id": variation.id,
+                "score_0_to_100": variation.score_0_to_100,
+                "ai_reasoning": variation.ai_reasoning,
+                "content_for_template": variation.content_for_template,
+            }
+            for variation in _sorted_variations(cover_letter_variations)
+        ],
+    )
 
     logger.info("Generated CV: %s", context.output_cv_path)
-    logger.info("Generated cover letter: %s", context.output_cover_letter_path)
+    logger.info("Generated cover letters: %s", context.output_cover_letters_path)
+    state.current_node = AUDIT_SECTION_ID
+    state.status = "running"
+    touch_state(state)
+    return state
+
+
+async def node_audit(
+    state: GraphState, context: RuntimeContext, logger: logging.Logger
+) -> GraphState:
+    logger.info("Node audit started.")
+    section_state = state.section_states[AUDIT_SECTION_ID]
+    template = context.prompt_templates[AUDIT_SECTION_ID]
+    cv_text = extract_docx_text(context.output_cv_path)
+    prompt = build_prompt_text(
+        template=template,
+        company_name=context.company_name,
+        inline_knowledge=not context.use_role_wide_knowledge_cache,
+    )
+    prompt = (
+        f"{prompt}\n\n## Final Tailored CV\n\n"
+        "Use this extracted text from the final generated CV as the audit target.\n\n"
+        f"{cv_text}"
+    ).strip()
+    render_prompt(AUDIT_SECTION_ID, prompt)
+
+    result = await _request_llm(
+        prompt=prompt,
+        section_id=AUDIT_SECTION_ID,
+        context=context,
+        logger=logger,
+    )
+    if context.debug_mode:
+        _write_debug_response(context.run_dir, AUDIT_SECTION_ID, 0, result.text)
+
+    output_attempt = _next_ai_output_attempt(section_state)
+    parsed_payload = parse_response_payload(result.text)
+    payload = parse_response_envelope_payload(result.text, section_id=AUDIT_SECTION_ID)
+    envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
+    if not envelope.variations:
+        raise ResponseSchemaError("Audit envelope contains no variations.")
+
+    section_state.ai_outputs.append(
+        AiOutputRecord(
+            attempt=output_attempt,
+            status="parsed",
+            raw_response=result.text,
+            parsed_payload=parsed_payload,
+            normalized_payload=payload.normalized_payload,
+        )
+    )
+    selected = _best_variation(envelope.variations)
+    section_state.variations = envelope.variations
+    section_state.selected_variation_id = selected.id
+    section_state.selected_content = selected.content_for_template
+    section_state.status = "approved"
+    context.output_audit_path.write_text(
+        selected.content_for_template.strip() + "\n", encoding="utf-8"
+    )
+    logger.info("Generated CV audit: %s", context.output_audit_path)
     state.current_node = "completed"
     state.status = "completed"
     touch_state(state)

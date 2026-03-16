@@ -133,10 +133,38 @@
   "doc_cover_letter": {
     "variations": [
       {
-        "id": "A",
+        "content_for_template": "I build production Python services and data workflows with a strong focus on reliability and measurable outcomes. My recent work includes API design, observability improvements, and deployment hardening that match the technical needs in your role. I would value the chance to contribute this hands-on engineering approach to your team.",
         "score_0_to_100": 92,
-        "ai_reasoning": "Short and specific to technical fit.",
-        "content_for_template": "I build production Python services and data workflows with a strong focus on reliability and measurable outcomes. My recent work includes API design, observability improvements, and deployment hardening that match the technical needs in your role. I would value the chance to contribute this hands-on engineering approach to your team."
+        "id": "A",
+        "ai_reasoning": "Short and specific to technical fit."
+      },
+      {
+        "content_for_template": "I have built backend services and automation workflows with a focus on reliability, delivery discipline, and practical business impact. The combination of Python, API work, and observability improvements in my recent projects maps closely to the problems described in your role. I would be glad to bring that pragmatic engineering approach to your team.",
+        "score_0_to_100": 89,
+        "id": "B",
+        "ai_reasoning": "Slightly broader platform framing."
+      },
+      {
+        "content_for_template": "My background is centered on building and improving production systems, from API contracts to CI/CD hardening and operational visibility. That mix of hands-on backend work and reliability-focused delivery is a strong match for the engineering needs in this role. I would welcome the opportunity to contribute that experience in a focused way.",
+        "score_0_to_100": 86,
+        "id": "C",
+        "ai_reasoning": "More emphasis on infrastructure and CI/CD."
+      },
+      {
+        "content_for_template": "I build production Python services with a strong focus on reliability, observability, and practical outcomes. The work I have done on APIs, deployment hardening, and data workflows aligns well with the core needs of this role. I would be glad to contribute that experience to your team.",
+        "score_0_to_100": 83,
+        "id": "D",
+        "ai_reasoning": "Shortest and most direct option."
+      }
+    ]
+  },
+  "audit_cv_deep_dive": {
+    "variations": [
+      {
+        "content_for_template": "# Deep Dive CV Audit\n\n## ATS Match Rate\nEstimated match: 84%\n\n## Keyword Gap Analysis\n- distributed systems: under-represented\n- mentoring: missing explicit evidence\n\n## Hiring Manager Read\nStrongest reason: credible Python and reliability delivery experience.\nBiggest red flag: not enough explicit scale metrics in recent bullets.\n\n## Actionable Fixes\n1. Target section: section_professional_summary - make role fit more explicit.\n2. Target section: section_experience_3 - add measurable reliability impact.\n3. Target section: section_skills_alignment - reflect JD wording more closely.\n4. Target section: section_experience_2 - surface platform ownership.\n5. Target section: section_experience_1 - add delivery outcomes.\n6. Target section: section_experience_3 - mention observability tooling more explicitly.\n7. Target section: section_professional_summary - reduce generic phrasing.\n8. Target section: section_skills_alignment - tighten keyword coverage.\n",
+        "score_0_to_100": 100,
+        "id": "A",
+        "ai_reasoning": "Grounded audit for offline smoke coverage."
       }
     ]
   }

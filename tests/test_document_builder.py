@@ -9,8 +9,9 @@ from document_builder import (
     TemplateValidationError,
     assemble_cv_document,
     discover_template_placeholders,
+    extract_docx_text,
     preflight_template,
-    write_cover_letter,
+    write_cover_letters_markdown,
 )
 from tests.test_support import make_workspace_temp_dir
 from workflow_definition import TEMPLATE_SECTION_IDS
@@ -66,8 +67,54 @@ def test_duplicate_normalized_placeholders_fail_fast() -> None:
         discover_template_placeholders(template_path)
 
 
-def test_write_cover_letter_exports_text_file() -> None:
-    tmp_path = make_workspace_temp_dir("cover-letter")
-    output_path = tmp_path / "cover_letter.txt"
-    write_cover_letter(output_path, "Hello recruiter")
-    assert output_path.read_text(encoding="utf-8") == "Hello recruiter\n"
+def test_extract_docx_text_reads_rendered_text() -> None:
+    tmp_path = make_workspace_temp_dir("docx-text")
+    template_path = tmp_path / "template.docx"
+    output_path = tmp_path / "output.docx"
+    _make_template(template_path)
+
+    assemble_cv_document(
+        template_path=template_path,
+        output_path=output_path,
+        selected_content={
+            "section_professional_summary": "SUMMARY OUT",
+            "section_skills_alignment": "SKILLS OUT",
+            "section_experience_1": "EXP1 OUT",
+            "section_experience_2": "EXP2 OUT",
+            "section_experience_3": "EXP3 OUT",
+        },
+    )
+
+    extracted = extract_docx_text(output_path)
+    assert "SUMMARY OUT" in extracted
+    assert "EXP3 OUT" in extracted
+
+
+def test_write_cover_letters_markdown_exports_selected_and_variations() -> None:
+    tmp_path = make_workspace_temp_dir("cover-letters")
+    output_path = tmp_path / "cover_letters.md"
+    write_cover_letters_markdown(
+        output_path,
+        selected_content="Hello recruiter",
+        variations=[
+            {
+                "id": "A",
+                "score_0_to_100": 95,
+                "ai_reasoning": "Best fit",
+                "content_for_template": "First option",
+            },
+            {
+                "id": "B",
+                "score_0_to_100": 91,
+                "ai_reasoning": "Second best",
+                "content_for_template": "Second option",
+            },
+        ],
+    )
+
+    text = output_path.read_text(encoding="utf-8")
+    assert "# Cover Letters" in text
+    assert "## Final Approved Version" in text
+    assert "Hello recruiter" in text
+    assert "## Variation A" in text
+    assert "Score: 95" in text

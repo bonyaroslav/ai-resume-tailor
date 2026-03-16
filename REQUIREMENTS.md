@@ -142,7 +142,8 @@ Rules:
 - Duplicate normalized template placeholders fail fast.
 - Outputs are written under run folder:
   - `tailored_cv.docx`
-  - `cover_letter.txt`
+  - `cover_letters.md`
+  - `cv_deep_dive_audit.md`
 
 ## CLI contract
 

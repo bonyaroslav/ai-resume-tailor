@@ -50,7 +50,8 @@ Expected artifacts under `runs/<run_id>/`:
 - `run.log`
 - `state_checkpoint.json`
 - `tailored_cv.docx`
-- `cover_letter.txt`
+- `cover_letters.md`
+- `cv_deep_dive_audit.md`
 - `job_description.md`
 
 ## 6. Real Gemini run (AI Studio key)

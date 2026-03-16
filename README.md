@@ -98,7 +98,7 @@ To complement the vision above, the current shipped V1 behavior is strict and de
 * **Strict AI response envelope:** `{"variations":[{"id","score_0_to_100","ai_reasoning","content_for_template"}]}`
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
-* **Run outputs:** `tailored_cv.docx`, `cover_letter.txt`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
+* **Run outputs:** `tailored_cv.docx`, `cover_letters.md`, `cv_deep_dive_audit.md`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
 
 ## 🤖 Why It Is Interesting for GenAI Engineering
 

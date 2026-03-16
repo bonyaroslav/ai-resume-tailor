@@ -27,6 +27,7 @@ def _write_minimal_prompt_set(prompts_dir: Path) -> None:
     _write(prompts_dir / "section_experience_2_previous.md", "Exp2")
     _write(prompts_dir / "section_experience_3_latest.md", "Exp3")
     _write(prompts_dir / "doc_cover_letter.md", "Cover")
+    _write(prompts_dir / "audit_cv_deep_dive.md", "Audit")
 
 
 def test_discover_prompt_templates_with_frontmatter_knowledge_files() -> None:
@@ -103,6 +104,7 @@ def test_discover_prompt_templates_fails_on_duplicate_normalized_experience_sect
     _write(prompts_dir / "section_experience_2_previous.md", "Exp2")
     _write(prompts_dir / "section_experience_3_latest.md", "Exp3")
     _write(prompts_dir / "doc_cover_letter.md", "Cover")
+    _write(prompts_dir / "audit_cv_deep_dive.md", "Audit")
 
     with pytest.raises(PromptValidationError):
         discover_prompt_templates(prompts_dir, knowledge_dir)
@@ -119,6 +121,7 @@ def test_discover_prompt_templates_rejects_example_only_files() -> None:
     _write(prompts_dir / "section_experience_2_previous.example.md", "Exp2")
     _write(prompts_dir / "section_experience_3_latest.example.md", "Exp3")
     _write(prompts_dir / "doc_cover_letter.example.md", "Cover")
+    _write(prompts_dir / "audit_cv_deep_dive.example.md", "Audit")
 
     with pytest.raises(PromptValidationError) as exc_info:
         discover_prompt_templates(prompts_dir, knowledge_dir)

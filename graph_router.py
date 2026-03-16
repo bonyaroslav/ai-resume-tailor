@@ -42,4 +42,7 @@ def route_next_node(state: GraphState) -> str:
     if state.current_node == "assemble":
         return "assemble"
 
+    if state.current_node == "audit_cv_deep_dive":
+        return "audit_cv_deep_dive"
+
     raise ValueError(f"Unknown graph node '{state.current_node}'.")

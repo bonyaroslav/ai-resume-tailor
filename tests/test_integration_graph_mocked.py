@@ -52,7 +52,8 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         checkpoint_path=run_dir / "state_checkpoint.json",
         template_path=template_path,
         output_cv_path=run_dir / "tailored_cv.docx",
-        output_cover_letter_path=run_dir / "cover_letter.txt",
+        output_cover_letters_path=run_dir / "cover_letters.md",
+        output_audit_path=run_dir / "cv_deep_dive_audit.md",
         company_name="Acme",
         job_description_path=job_description_path,
         job_description="Example JD",
@@ -174,6 +175,51 @@ def _fake_response_for_section(section_id: str) -> str:
             }
         )
 
+    if section_id == "doc_cover_letter":
+        return json.dumps(
+            {
+                "variations": [
+                    {
+                        "id": "A",
+                        "score_0_to_100": 96,
+                        "ai_reasoning": "Best fit",
+                        "content_for_template": "Approved content for doc_cover_letter",
+                    },
+                    {
+                        "id": "B",
+                        "score_0_to_100": 92,
+                        "ai_reasoning": "Strong alternative",
+                        "content_for_template": "Alternative B for doc_cover_letter",
+                    },
+                    {
+                        "id": "C",
+                        "score_0_to_100": 88,
+                        "ai_reasoning": "Balanced option",
+                        "content_for_template": "Alternative C for doc_cover_letter",
+                    },
+                    {
+                        "id": "D",
+                        "score_0_to_100": 84,
+                        "ai_reasoning": "Shortest option",
+                        "content_for_template": "Alternative D for doc_cover_letter",
+                    },
+                ]
+            }
+        )
+
+    if section_id == "audit_cv_deep_dive":
+        return json.dumps(
+            {
+                "variations": [
+                    {
+                        "id": "A",
+                        "score_0_to_100": 100,
+                        "ai_reasoning": "Grounded audit",
+                        "content_for_template": "# Deep Dive CV Audit\n\n## ATS Match Rate\nEstimated match: 84%\n",
+                    }
+                ]
+            }
+        )
     envelope = {
         "variations": [
             {
@@ -256,7 +302,8 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
 
     assert final_state.status == "completed"
     assert context.output_cv_path.exists()
-    assert context.output_cover_letter_path.exists()
+    assert context.output_cover_letters_path.exists()
+    assert context.output_audit_path.exists()
     checkpoint_state = load_checkpoint(context.checkpoint_path)
     assert checkpoint_state.status == "completed"
     assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs
@@ -275,8 +322,12 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert "Approved content for section_experience_2" in output_text
     assert "Approved content for section_experience_3" in output_text
 
-    cover_letter = context.output_cover_letter_path.read_text(encoding="utf-8")
-    assert "Approved content for doc_cover_letter" in cover_letter
+    cover_letters = context.output_cover_letters_path.read_text(encoding="utf-8")
+    assert "## Final Approved Version" in cover_letters
+    assert "Approved content for doc_cover_letter" in cover_letters
+    assert "## Variation A" in cover_letters
+    audit_text = context.output_audit_path.read_text(encoding="utf-8")
+    assert "# Deep Dive CV Audit" in audit_text
 
 
 def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -> None:
@@ -353,7 +404,8 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
     assert final_state.status == "completed"
     assert final_state.current_node == "triage_stop"
     assert not context.output_cv_path.exists()
-    assert not context.output_cover_letter_path.exists()
+    assert not context.output_cover_letters_path.exists()
+    assert not context.output_audit_path.exists()
 
 
 def test_run_graph_always_continue_ignores_avoid_triage(monkeypatch: object) -> None:
@@ -431,7 +483,8 @@ def test_run_graph_always_continue_ignores_avoid_triage(monkeypatch: object) -> 
     assert final_state.status == "completed"
     assert final_state.current_node == "completed"
     assert context.output_cv_path.exists()
-    assert context.output_cover_letter_path.exists()
+    assert context.output_cover_letters_path.exists()
+    assert context.output_audit_path.exists()
 
 
 def test_run_graph_passes_cached_content_and_skips_inline_knowledge(

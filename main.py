@@ -11,6 +11,7 @@ from checkpoint import CheckpointError, load_checkpoint, save_checkpoint
 from document_builder import TemplateValidationError, preflight_template
 from graph_nodes import (
     RuntimeContext,
+    node_audit,
     node_assemble,
     node_generate_sections,
     node_review,
@@ -666,6 +667,16 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
                 )
                 continue
 
+            if next_node == "audit_cv_deep_dive":
+                state = await node_audit(state, context, logger)
+                logger.info(
+                    "Node audit_cv_deep_dive completed duration_ms=%s status=%s current_node=%s",
+                    int((monotonic() - node_started) * 1000),
+                    state.status,
+                    state.current_node,
+                )
+                continue
+
             raise ValueError(f"Unhandled node '{next_node}'")
         except Exception:
             state.status = "failed"
@@ -720,7 +731,8 @@ def _prepare_runtime_context(
         checkpoint_path=checkpoint_path,
         template_path=template_path,
         output_cv_path=run_dir / output_cv_filename,
-        output_cover_letter_path=run_dir / "cover_letter.txt",
+        output_cover_letters_path=run_dir / "cover_letters.md",
+        output_audit_path=run_dir / "cv_deep_dive_audit.md",
         company_name=company_name,
         job_description_path=job_description_path,
         job_description=job_description,

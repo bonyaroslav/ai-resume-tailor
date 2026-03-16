@@ -98,6 +98,40 @@ def assemble_cv_document(
     document.save(str(output_path))
 
 
-def write_cover_letter(output_path: Path, content: str) -> None:
+def extract_docx_text(document_path: Path) -> str:
+    document = Document(str(document_path))
+    lines = [
+        paragraph.text.strip()
+        for paragraph in _iter_paragraphs(document)
+        if paragraph.text.strip()
+    ]
+    return "\n".join(lines).strip()
+
+
+def write_cover_letters_markdown(
+    output_path: Path,
+    *,
+    selected_content: str,
+    variations: list[dict[str, str | int]],
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content.strip() + "\n", encoding="utf-8")
+    lines = [
+        "# Cover Letters",
+        "",
+        "## Final Approved Version",
+        selected_content.strip(),
+    ]
+
+    for variation in variations:
+        lines.extend(
+            [
+                "",
+                f"## Variation {variation['id']}",
+                f"Score: {variation['score_0_to_100']}",
+                f"Reasoning: {variation['ai_reasoning']}",
+                "",
+                str(variation["content_for_template"]).strip(),
+            ]
+        )
+
+    output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
