@@ -66,6 +66,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Start a new run")
     run_parser.add_argument("--jd-path", required=True, type=Path)
     run_parser.add_argument("--company", required=True)
+    run_parser.add_argument("--job-title", default=None)
     run_parser.add_argument("--template-path", type=Path, default=None)
     run_parser.add_argument("--model", default=None)
     run_parser.add_argument("--role", default=None)
@@ -337,6 +338,7 @@ def _load_metadata_or_default(
         metadata = {
             "run_id": run_dir.name,
             "company_name": args.company,
+            "job_title": getattr(args, "job_title", None) or "",
             "model_name": resolve_gemini_model_name(args.model),
             "debug_mode": str(bool(args.debug)).lower(),
         }
@@ -754,7 +756,11 @@ def _configure_cache_runtime_context(
 
 
 async def _handle_run(args: argparse.Namespace) -> None:
-    run_dir = create_run_directory(Path("runs"), args.company)
+    run_dir = create_run_directory(
+        Path("runs"),
+        args.company,
+        getattr(args, "job_title", None),
+    )
     checkpoint_path = run_dir / "state_checkpoint.json"
     state, action = _resolve_run_state_for_run_command(
         run_dir=run_dir,
@@ -816,6 +822,8 @@ async def _handle_run(args: argparse.Namespace) -> None:
         {
             "run_id": run_dir.name,
             "company_name": metadata.get("company_name", args.company),
+            "job_title": metadata.get("job_title", getattr(args, "job_title", None))
+            or "",
             "template_path": str(template_path),
             "model_name": model_name,
             "role_name": role_name,

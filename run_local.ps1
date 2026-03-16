@@ -31,6 +31,7 @@ $requirementsFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerCo
 $apiKeyFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.ApiKeyFile
 $jdPath = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.JobDescriptionPath
 $companyName = [string]$RunnerConfig.CompanyName
+$jobTitle = [string]$RunnerConfig.JobTitle
 $tierName = [string]$RunnerConfig.TierName
 $roleName = [string]$RunnerConfig.RoleName
 $defaultRoleName = "role_senior_dotnet_engineer"
@@ -154,6 +155,9 @@ else {
 
 Write-Host "[5/5] Running AI Resume Tailor"
 $runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName, "--role", $roleName)
+if (-not [string]::IsNullOrWhiteSpace($jobTitle)) {
+    $runArgs += @("--job-title", $jobTitle)
+}
 if (-not [string]::IsNullOrWhiteSpace($templatePath)) {
     $resolvedTemplate = Resolve-FromRoot -BasePath $projectRoot -InputPath $templatePath
     $runArgs += @("--template-path", $resolvedTemplate)

@@ -23,6 +23,7 @@ def _write_run_fixture(run_dir: Path, state: GraphState) -> None:
         {
             "run_id": run_dir.name,
             "company_name": "Acme",
+            "job_title": "",
             "template_path": str(Path(main.DEFAULT_TEMPLATE_PATH)),
             "model_name": DEFAULT_GEMINI_MODEL,
             "debug_mode": "false",

@@ -70,6 +70,7 @@ Use the built-in runner so you do not re-enter API key, company, or JD path ever
 3. Edit `runner.config.ps1` once:
    - `JobDescriptionPath`
    - `CompanyName`
+   - `JobTitle` (optional, for separate run folders per vacancy)
    - `ModelName` (optional, default shown is `gemini-2.5-flash`)
 4. Run:
 
@@ -98,8 +99,8 @@ Google AI Studio controls account access, quotas, and billing, but model choice 
 .\.venv\Scripts\python.exe main.py resume --checkpoint-path .\runs\<company-slug>\state_checkpoint.json
 ```
 
-Run folders are reused by company slug (example: `runs\mindera`).
-If you want a separate run, use a unique company value, for example `"Mindera-v2"`.
+Run folders are reused by company slug (example: `runs\mindera`). If you pass `--job-title`, the run folder becomes `runs\mindera_senior_backend_engineer`.
+If you want separate runs for multiple vacancies at one company, use `--job-title`.
 
 ## 8. Full end-to-end command path
 

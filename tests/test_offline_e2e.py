@@ -26,6 +26,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
         command="run",
         jd_path=jd_path,
         company="offline-smoke",
+        job_title="",
         template_path=Path(main.DEFAULT_TEMPLATE_PATH),
         model=DEFAULT_GEMINI_MODEL,
         role=None,
@@ -38,7 +39,7 @@ def test_offline_end_to_end_run_creates_outputs(monkeypatch: object) -> None:
     monkeypatch.setenv("ART_OFFLINE_MODE", "1")
     monkeypatch.setenv("ART_AUTO_APPROVE_REVIEW", "1")
     monkeypatch.setenv("ART_TRIAGE_DECISION_MODE", "always_continue")
-    monkeypatch.setattr(main, "create_run_directory", lambda _, __: run_dir)
+    monkeypatch.setattr(main, "create_run_directory", lambda _, __, ___=None: run_dir)
 
     asyncio.run(main._handle_run(args))
 

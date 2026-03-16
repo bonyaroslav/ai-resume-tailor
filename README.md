@@ -100,6 +100,7 @@ Current CLI commands:
 
 ```sh
 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+python main.py run --jd-path ./inputs/job_description.txt --company "Stripe" --job-title "Senior Backend Engineer"
 python main.py resume --run-path ./runs/stripe
 # or
 python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
@@ -160,6 +161,7 @@ GEMINI_API_KEY=your_api_key_here
 
 ```sh
 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+python main.py run --jd-path ./inputs/job_description.txt --company "Stripe" --job-title "Senior Backend Engineer"
 
 ```
 
@@ -171,7 +173,7 @@ If you do not want to type API key / JD path / company each run:
 
 1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
 2. Put your key inside `secrets\gemini_api_key.txt` (gitignored).
-3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `ModelName`).
+3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `JobTitle`, optional `ModelName`).
 4. Run:
 
 ```powershell
@@ -270,8 +272,8 @@ python main.py regenerate --run-path ./runs/stripe --sections section_profession
 python main.py rebuild-output --run-path ./runs/stripe
 ```
 
-Run folders are now reused by company slug (`runs/<company-slug>`).  
-If you want a separate run, use a unique company name/suffix (for example `"Stripe-v2"`).
+Run folders are now reused by company slug (`runs/<company-slug>`). If you pass `--job-title`, the run folder becomes `runs/<company_slug>_<job_title_slug>`.  
+If you want separate runs for multiple roles at one company, use `--job-title` (for example `runs/stripe_senior_backend_engineer`).
 
 *(Optional: Insert a `.gif` here showing your CLI menu in action. Hiring managers love seeing the tool actually working in a terminal).*
 

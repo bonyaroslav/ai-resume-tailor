@@ -7,6 +7,7 @@ $RunnerConfig = @{
 
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Intetics.txt"
     CompanyName = "Intetics"
+    JobTitle = ""
     TierName = "freetier"
     RoleName = "role_senior_dotnet_engineer"
 
