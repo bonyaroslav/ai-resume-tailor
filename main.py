@@ -36,6 +36,7 @@ from settings import (
     role_knowledge_dir,
     role_prompts_dir,
     resolve_gemini_model_name,
+    resolve_output_cv_filename,
     resolve_role_name,
 )
 from workflow_definition import (
@@ -342,6 +343,7 @@ def _load_metadata_or_default(
             "company_name": args.company,
             "job_title": getattr(args, "job_title", None) or "",
             "model_name": resolve_gemini_model_name(args.model),
+            "output_cv_filename": resolve_output_cv_filename(),
             "debug_mode": str(bool(args.debug)).lower(),
         }
     return metadata
@@ -703,6 +705,7 @@ def _prepare_runtime_context(
     template_path: Path,
     model_name: str,
     role_name: str,
+    output_cv_filename: str,
     debug_mode: bool,
     skills_category_count: int,
 ) -> RuntimeContext:
@@ -716,7 +719,7 @@ def _prepare_runtime_context(
         run_dir=run_dir,
         checkpoint_path=checkpoint_path,
         template_path=template_path,
-        output_cv_path=run_dir / "tailored_cv.docx",
+        output_cv_path=run_dir / output_cv_filename,
         output_cover_letter_path=run_dir / "cover_letter.txt",
         company_name=company_name,
         job_description_path=job_description_path,
@@ -821,6 +824,9 @@ async def _handle_run(args: argparse.Namespace) -> None:
         args.model,
         metadata_model=metadata.get("model_name"),
     )
+    output_cv_filename = resolve_output_cv_filename(
+        metadata_filename=metadata.get("output_cv_filename")
+    )
     template_path = _resolve_template_path(
         args.template_path,
         metadata_template=metadata.get("template_path"),
@@ -842,6 +848,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
         template_path=template_path,
         model_name=model_name,
         role_name=role_name,
+        output_cv_filename=output_cv_filename,
         debug_mode=debug_mode,
         skills_category_count=skills_category_count,
     )
@@ -861,6 +868,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
             "template_path": str(template_path),
             "model_name": model_name,
             "role_name": role_name,
+            "output_cv_filename": output_cv_filename,
             "debug_mode": str(debug_mode).lower(),
             "skills_category_count": str(skills_category_count),
         },
@@ -892,6 +900,9 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         args.model,
         metadata_model=metadata.get("model_name"),
     )
+    output_cv_filename = resolve_output_cv_filename(
+        metadata_filename=metadata.get("output_cv_filename")
+    )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
@@ -904,6 +915,7 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         ),
         model_name=model_name,
         role_name=role_name,
+        output_cv_filename=output_cv_filename,
         debug_mode=metadata.get("debug_mode", "false") == "true",
         skills_category_count=_resolve_skills_category_count(
             getattr(args, "skills_category_count", None),
@@ -956,6 +968,9 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         args.model,
         metadata_model=metadata.get("model_name"),
     )
+    output_cv_filename = resolve_output_cv_filename(
+        metadata_filename=metadata.get("output_cv_filename")
+    )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
@@ -968,6 +983,7 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         ),
         model_name=model_name,
         role_name=role_name,
+        output_cv_filename=output_cv_filename,
         debug_mode=metadata.get("debug_mode", "false") == "true",
         skills_category_count=_resolve_skills_category_count(
             getattr(args, "skills_category_count", None),
@@ -1017,6 +1033,9 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
             metadata_model=metadata.get("model_name"),
         ),
         role_name=role_name,
+        output_cv_filename=resolve_output_cv_filename(
+            metadata_filename=metadata.get("output_cv_filename")
+        ),
         debug_mode=metadata.get("debug_mode", "false") == "true",
         skills_category_count=_resolve_skills_category_count(
             explicit_count=None,

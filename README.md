@@ -2,7 +2,7 @@
 
 <div align="center">
   <h2>🚀 AI Resume Tailor</h2>
-  <p><b>A Local, Graph-Based State Machine for ATS-Optimized CV Generation</b></p>
+  <p><b>A Python LLM workflow for evidence-grounded resume tailoring and human-reviewed CV generation</b></p>
 
   <p align="center">
     <a href="https://github.com/your_username/ai-resume-tailor/issues">Report Bug</a>
@@ -12,29 +12,33 @@
 
   <p>
     <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=for-the-badge&logo=python" alt="Python">
-    <img src="https://img.shields.io/badge/Architecture-State_Machine-brightgreen.svg?style=for-the-badge" alt="Architecture">
-    <img src="https://img.shields.io/badge/AI-Gemini_V1-orange.svg?style=for-the-badge" alt="LLM">
-    <img src="https://img.shields.io/badge/Privacy-100%25_Local-purple.svg?style=for-the-badge&logo=lock" alt="Privacy">
+    <img src="https://img.shields.io/badge/Architecture-Workflow_Graph-brightgreen.svg?style=for-the-badge" alt="Architecture">
+    <img src="https://img.shields.io/badge/AI-Gemini_API-orange.svg?style=for-the-badge" alt="LLM">
+    <img src="https://img.shields.io/badge/Review-Human_in_the_Loop-purple.svg?style=for-the-badge" alt="Review">
+    <img src="https://img.shields.io/badge/Google_AI_Studio-Free_Tier_Friendly-4285F4.svg?style=for-the-badge&logo=google" alt="Google AI Studio Free Tier Friendly">
   </p>
+
+  <p><b>Designed to work within Gemini free-tier limits</b> · Cost-aware defaults · Checkpointed runs · Structured LLM outputs · Human review gates</p>
 </div>
 
 ---
 
 ## 📖 The Problem & The Solution
 
-**The Problem:** Over 70% of resumes are automatically rejected by Applicant Tracking Systems (ATS) because they lack the specific semantic vocabulary of the target Job Description. Yet, manually rewriting a CV for every application is a massive time sink, and standard ChatGPT outputs sound generic and hallucinate facts.
+**The Problem:** Resume tailoring is repetitive, easy to get wrong, and one-shot LLM rewrites often miss role-specific language or overstate experience.
 
-**The Solution:** `AI Resume Tailor` is a local Python CLI tool built as a small **Directed Graph State Machine**. It routes a job description through triage, concurrent section generation, human review, and final `.docx` assembly without relying on heavy agent frameworks.
+**The Solution:** `AI Resume Tailor` is a Python CLI that orchestrates job-description analysis, section-level generation, human review, and final `.docx` assembly through an explicit graph workflow. It uses structured LLM outputs, scoped context injection, and resumable checkpoints to keep generation traceable and grounded in real experience.
 
 ---
 
 ## ✨ Key Features
 
-* **🎯 ATS Semantic Alignment:** Rewrites bullet points to match the exact vocabulary and technical phrasing expected by the target company's ATS, without inventing fake experience.
-* **🔄 Graph-Based Workflow:** Uses an explicit fan-out/fan-in workflow with targeted regeneration for rejected sections.
-* **🛑 Human-in-the-Loop (HITL):** Built-in checkpointing pauses execution, presenting a CLI menu for A/B testing and manual refinement of generated text.
-* **🔌 Minimal LLM Layer:** V1 uses a single centralized Gemini client so API calls remain isolated from workflow logic.
-* **🔒 Zero-Data-Leak Architecture:** Runs 100% locally. Your personal data is isolated via YAML Frontmatter injection and protected by strict `.gitignore` rules.
+* **🎯 Evidence-Grounded Tailoring:** Rewrites resume sections against the target role without inventing experience.
+* **🔄 Graph-Orchestrated Workflow:** Uses explicit fan-out/fan-in routing with targeted regeneration for rejected sections.
+* **🛑 Human Approval Gates:** Built-in checkpointing pauses execution for choose/edit/retry decisions before final export.
+* **🔌 Structured LLM Layer:** Gemini calls are centralized and validated through strict response envelopes.
+* **📚 Scoped Context Injection:** Prompt frontmatter loads only the knowledge files each section actually needs.
+* **💾 Resumable Run Artifacts:** Checkpoints, logs, outputs, and the source JD are persisted under `runs/`.
 
 ---
 
@@ -70,7 +74,7 @@ graph TD
 
 1. **Why a Custom State Machine over LangChain?** For a strictly scoped CLI tool, a plain Python state machine is easier to read, easier to test, and harder to over-engineer.
 2. **Context Isolation via Frontmatter:**
-To completely eliminate LLM hallucinations, prompts do not read the entire "knowledge base" blindly. Markdown prompts utilize YAML frontmatter to surgically request *only* the specific text files they need (e.g., `section_experience_3_latest.md` requests only the files declared in its frontmatter).
+To reduce hallucination risk and avoid context bloat, prompts do not read the entire knowledge base blindly. Markdown prompts use YAML frontmatter to request *only* the specific files they need.
 
 
 ---
@@ -80,8 +84,8 @@ To completely eliminate LLM hallucinations, prompts do not read the entire "know
 V1 focuses on delivering a deterministic, lightweight State Machine. Once the core pipeline is locked, the following architectural upgrades are planned:
 
 * **Multi-Agent Evaluator (LLM-as-a-Judge):** Add one critic node before human review if V1 proves the core workflow first.
-* **100% Air-Gapped Local Execution:** Add a local provider path via **Ollama / vLLM** after the Gemini-only V1 flow is stable.
-* **Local Semantic RAG:** Transitioning from static YAML Frontmatter to a local Vector Database (e.g., ChromaDB). The system will use Cosine Similarity to dynamically inject only the most mathematically relevant achievements from the user's career history into the AI's context window.
+* **Alternative Local-Provider Path:** Add **Ollama / vLLM** after the Gemini-only V1 flow is stable.
+* **Retrieval-Augmented Context Selection:** Move from static YAML frontmatter toward retrieval-driven context injection when the current workflow is stable.
 
 ---
 
@@ -95,6 +99,13 @@ To complement the vision above, the current shipped V1 behavior is strict and de
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
 * **Run outputs:** `tailored_cv.docx`, `cover_letter.txt`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
+
+## 🤖 Why It Is Interesting for GenAI Engineering
+
+* **Structured generation contracts:** Every prompt is expected to return machine-readable variations rather than free-form prose.
+* **Human review gates over autonomous loops:** Review happens before final output, keeping control with the operator.
+* **Retrieval-ready context design:** Prompt frontmatter already constrains context loading and can evolve into retrieval-based selection later.
+* **Deterministic offline validation:** Offline fixtures make it possible to exercise the workflow without live API calls.
 
 Current CLI commands:
 
@@ -281,8 +292,7 @@ If you want separate runs for multiple roles at one company, use `--job-title` (
 
 ## 🛡️ Privacy & Security
 
-This application is designed with a **Zero-Trust approach to the Cloud**.
-All personal receipts, skills, and base CV data live exclusively in the `knowledge/` directory, which is strictly `.gitignore`'d. Run outputs are saved to a local `runs/` directory. No data is stored in vector databases or external servers outside of the ephemeral LLM API call.
+Knowledge files and run artifacts stay in repo-local directories. During live generation, only scoped prompt context is sent to the Gemini API; outputs, checkpoints, and logs remain under `runs/`.
 
 ---
 

@@ -8,7 +8,8 @@ $RunnerConfig = @{
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Mindera.md"
     CompanyName = "Mindera."
     JobTitle = "NET_Generative_AI"
-    TierName = "freetier"
+    OutputCvFileName = "tailored_cv.docx"
+    TierName = "heavy_model"
     RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.
@@ -30,7 +31,7 @@ $RunnerConfig = @{
             MinIntervalSeconds = "1"
             Max429Attempts = "5"
             BackoffBaseSeconds = "1"
-        }
+        }   
     }
 
     # Optional

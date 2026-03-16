@@ -32,6 +32,7 @@ $apiKeyFile = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.A
 $jdPath = Resolve-FromRoot -BasePath $projectRoot -InputPath $RunnerConfig.JobDescriptionPath
 $companyName = [string]$RunnerConfig.CompanyName
 $jobTitle = [string]$RunnerConfig.JobTitle
+$outputCvFileName = [string]$RunnerConfig.OutputCvFileName
 $tierName = [string]$RunnerConfig.TierName
 $roleName = [string]$RunnerConfig.RoleName
 $defaultRoleName = "role_senior_dotnet_engineer"
@@ -65,6 +66,21 @@ if (-not (Test-Path -LiteralPath $jdPath)) {
 }
 if ([string]::IsNullOrWhiteSpace($companyName)) {
     throw "CompanyName must not be empty in runner.config.ps1"
+}
+if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
+    $outputCvFileName = $outputCvFileName.Trim()
+    if ([System.IO.Path]::GetFileName($outputCvFileName) -ne $outputCvFileName) {
+        throw "OutputCvFileName must be a filename only, not a path."
+    }
+    if ($outputCvFileName -in @(".", "..")) {
+        throw "OutputCvFileName must be a valid filename."
+    }
+    if ([string]::IsNullOrWhiteSpace([System.IO.Path]::GetExtension($outputCvFileName))) {
+        $outputCvFileName = "$outputCvFileName.docx"
+    }
+    if ([System.StringComparer]::OrdinalIgnoreCase.Compare([System.IO.Path]::GetExtension($outputCvFileName), ".docx") -ne 0) {
+        throw "OutputCvFileName must use the .docx extension."
+    }
 }
 if ([string]::IsNullOrWhiteSpace($tierName)) {
     throw "TierName must not be empty in runner.config.ps1"
@@ -124,6 +140,9 @@ $env:ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE = if ($useRoleWideKnowledgeCache) { "1" }
 $env:ART_FORCE_KNOWLEDGE_REUPLOAD = if ($forceKnowledgeReupload) { "1" } else { "0" }
 $env:ART_REQUIRE_CACHED_TOKEN_CONFIRMATION = if ($requireCachedTokenConfirmation) { "1" } else { "0" }
 $env:ART_KNOWLEDGE_CACHE_TTL_SECONDS = [string]$knowledgeCacheTtlSeconds
+if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
+    $env:ART_OUTPUT_CV_FILENAME = $outputCvFileName
+}
 if (-not [string]::IsNullOrWhiteSpace($knowledgeCacheRegistryPath)) {
     $env:ART_KNOWLEDGE_CACHE_REGISTRY_PATH = Resolve-FromRoot -BasePath $projectRoot -InputPath $knowledgeCacheRegistryPath
 }
@@ -131,6 +150,9 @@ if (-not [string]::IsNullOrWhiteSpace($knowledgeCacheRegistryPath)) {
 Write-Host "      TierName=$tierName"
 Write-Host "      ModelName=$modelName"
 Write-Host "      RoleName=$roleName"
+if (-not [string]::IsNullOrWhiteSpace($env:ART_OUTPUT_CV_FILENAME)) {
+    Write-Host "      ART_OUTPUT_CV_FILENAME=$env:ART_OUTPUT_CV_FILENAME"
+}
 Write-Host "      ART_GENERATION_MODE=$env:ART_GENERATION_MODE"
 Write-Host "      ART_LLM_MIN_INTERVAL_SECONDS=$env:ART_LLM_MIN_INTERVAL_SECONDS"
 Write-Host "      ART_LLM_MAX_429_ATTEMPTS=$env:ART_LLM_MAX_429_ATTEMPTS"
