@@ -24,7 +24,7 @@ from knowledge_cache import (
     DEFAULT_KNOWLEDGE_CACHE_REGISTRY_PATH,
     DEFAULT_KNOWLEDGE_CACHE_TTL_SECONDS,
     KnowledgeCacheError,
-    prewarm_role_wide_knowledge_cache,
+    prepare_run_scoped_knowledge_cache,
 )
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
@@ -57,6 +57,8 @@ KNOWLEDGE_CACHE_TTL_SECONDS_ENV = "ART_KNOWLEDGE_CACHE_TTL_SECONDS"
 KNOWLEDGE_CACHE_REGISTRY_PATH_ENV = "ART_KNOWLEDGE_CACHE_REGISTRY_PATH"
 FORCE_KNOWLEDGE_REUPLOAD_ENV = "ART_FORCE_KNOWLEDGE_REUPLOAD"
 DEFAULT_SKILLS_CATEGORY_COUNT = 4
+RUN_JOB_DESCRIPTION_FILENAME = "job_description.md"
+LEGACY_RUN_JOB_DESCRIPTION_FILENAME = "job_description.txt"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -557,11 +559,13 @@ async def _ensure_role_wide_knowledge_cache(
         return
 
     cache = await asyncio.to_thread(
-        prewarm_role_wide_knowledge_cache,
+        prepare_run_scoped_knowledge_cache,
         api_key=context.api_key,
+        run_id=state.run_id,
         role_name=context.role_name,
         model_name=context.model_name,
         prompt_templates=context.prompt_templates,
+        job_description_path=context.job_description_path,
         registry_path=context.knowledge_cache_registry_path,
         ttl_seconds=context.knowledge_cache_ttl_seconds,
         invalidate_cache=context.invalidate_role_wide_knowledge_cache,
@@ -581,7 +585,8 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
     logger = configure_logging(context.run_dir, context.debug_mode)
     logger.info("Run started. run_id=%s, model=%s", state.run_id, context.model_name)
     logger.info(
-        "Loaded JD metadata (chars=%s, sha256=%s)",
+        "Loaded JD metadata path=%s chars=%s sha256=%s",
+        context.job_description_path,
         len(context.job_description),
         sha256_short(context.job_description),
     )
@@ -693,6 +698,7 @@ def _prepare_runtime_context(
     *,
     run_dir: Path,
     company_name: str,
+    job_description_path: Path,
     job_description: str,
     template_path: Path,
     model_name: str,
@@ -713,6 +719,7 @@ def _prepare_runtime_context(
         output_cv_path=run_dir / "tailored_cv.docx",
         output_cover_letter_path=run_dir / "cover_letter.txt",
         company_name=company_name,
+        job_description_path=job_description_path,
         job_description=job_description,
         api_key=_load_api_key(),
         model_name=model_name,
@@ -728,7 +735,7 @@ def _prepare_runtime_context(
         ),
         use_role_wide_knowledge_cache=_truthy_env_with_default(
             os.getenv(USE_ROLE_WIDE_KNOWLEDGE_CACHE_ENV),
-            default=False,
+            default=True,
         ),
         require_cached_token_confirmation=_truthy_env_with_default(
             os.getenv(REQUIRE_CACHED_TOKEN_CONFIRMATION_ENV),
@@ -755,6 +762,37 @@ def _configure_cache_runtime_context(
     context.knowledge_cache_registry_path = _knowledge_cache_registry_path()
 
 
+def _run_job_description_path(run_dir: Path) -> Path:
+    return run_dir / RUN_JOB_DESCRIPTION_FILENAME
+
+
+def _legacy_run_job_description_path(run_dir: Path) -> Path:
+    return run_dir / LEGACY_RUN_JOB_DESCRIPTION_FILENAME
+
+
+def _load_existing_run_job_description(run_dir: Path) -> tuple[Path, str]:
+    jd_path = _run_job_description_path(run_dir)
+    if jd_path.exists():
+        return jd_path, jd_path.read_text(encoding="utf-8")
+
+    legacy_path = _legacy_run_job_description_path(run_dir)
+    if legacy_path.exists():
+        jd_text = legacy_path.read_text(encoding="utf-8")
+        jd_path.write_text(jd_text, encoding="utf-8")
+        return jd_path, jd_text
+
+    raise FileNotFoundError(
+        f"Run job description not found: {_run_job_description_path(run_dir)}"
+    )
+
+
+def _persist_run_job_description(run_dir: Path, source_path: Path) -> tuple[Path, str]:
+    jd_text = read_job_description(source_path)
+    jd_path = _run_job_description_path(run_dir)
+    jd_path.write_text(jd_text, encoding="utf-8")
+    return jd_path, jd_text
+
+
 async def _handle_run(args: argparse.Namespace) -> None:
     run_dir = create_run_directory(
         Path("runs"),
@@ -777,12 +815,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
         metadata_role=metadata.get("role_name"),
     )
     os.environ[ROLE_NAME_ENV] = role_name
-    jd_path = run_dir / "job_description.txt"
-    if jd_path.exists():
-        jd_text = jd_path.read_text(encoding="utf-8")
-    else:
-        jd_text = read_job_description(args.jd_path)
-        jd_path.write_text(jd_text, encoding="utf-8")
+    jd_path, jd_text = _persist_run_job_description(run_dir, args.jd_path)
 
     model_name = resolve_gemini_model_name(
         args.model,
@@ -804,6 +837,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata.get("company_name", args.company),
+        job_description_path=jd_path,
         job_description=jd_text,
         template_path=template_path,
         model_name=model_name,
@@ -850,7 +884,7 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         metadata_role=metadata.get("role_name"),
     )
     os.environ[ROLE_NAME_ENV] = role_name
-    jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
+    jd_path, jd_text = _load_existing_run_job_description(run_dir)
     _print_status_summary(state, run_dir)
     _print_next_steps(state, run_dir)
 
@@ -861,6 +895,7 @@ async def _handle_resume(args: argparse.Namespace) -> None:
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
+        job_description_path=jd_path,
         job_description=jd_text,
         template_path=_resolve_template_path(
             explicit_template=None,
@@ -905,7 +940,7 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         metadata_role=metadata.get("role_name"),
     )
     os.environ[ROLE_NAME_ENV] = role_name
-    jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
+    jd_path, jd_text = _load_existing_run_job_description(run_dir)
     try:
         sections = _parse_requested_sections(args.sections)
     except ValueError as exc:
@@ -924,6 +959,7 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
+        job_description_path=jd_path,
         job_description=jd_text,
         template_path=_resolve_template_path(
             explicit_template=None,
@@ -965,10 +1001,11 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
         metadata_role=metadata.get("role_name"),
     )
     os.environ[ROLE_NAME_ENV] = role_name
-    jd_text = (run_dir / "job_description.txt").read_text(encoding="utf-8")
+    jd_path, jd_text = _load_existing_run_job_description(run_dir)
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata["company_name"],
+        job_description_path=jd_path,
         job_description=jd_text,
         template_path=_resolve_template_path(
             explicit_template=None,

@@ -39,7 +39,7 @@ def test_discover_prompt_templates_with_frontmatter_knowledge_files() -> None:
         prompts_dir / "section_professional_summary.md",
         """---
 knowledge_files:
-  - "skills.md"
+  - \"skills.md\"
 ---
 Summary prompt body
 """,
@@ -60,7 +60,7 @@ def test_discover_prompt_templates_rejects_unsupported_frontmatter_keys() -> Non
     _write(
         prompts_dir / "section_professional_summary.md",
         """---
-unsupported_key: "value"
+unsupported_key: \"value\"
 ---
 Summary prompt body
 """,
@@ -79,7 +79,7 @@ def test_discover_prompt_templates_fails_on_missing_knowledge_file() -> None:
         prompts_dir / "section_skills_alignment.md",
         """---
 knowledge_files:
-  - "missing.md"
+  - \"missing.md\"
 ---
 Skills prompt body
 """,
@@ -127,25 +127,27 @@ def test_discover_prompt_templates_rejects_example_only_files() -> None:
     assert "Create your own prompt files" in message
 
 
-def test_build_prompt_text_always_includes_job_description_runtime_input() -> None:
+def test_build_prompt_text_includes_attached_files_header_without_inline_jd() -> None:
     template = PromptTemplate(
         section_id="section_professional_summary",
         path=Path("prompts/section_professional_summary.md"),
         body="Write three summary options.",
         knowledge_files=[],
     )
-    job_description = "Need Python, AWS, and strong ownership.\nMust mentor juniors."
 
     prompt = build_prompt_text(
         template=template,
         company_name="Acme",
-        job_description=job_description,
     )
 
+    assert "## Attached Files" in prompt
+    assert "- `job_description.md` - Source of truth" in prompt
+    assert (
+        "Use `job_description.md` as the source of truth for the target role." in prompt
+    )
     assert "## Runtime Input" in prompt
     assert "Company Name: Acme" in prompt
-    assert "Job Description:\nNeed Python, AWS, and strong ownership." in prompt
-    assert "Must mentor juniors." in prompt
+    assert "Job Description:" not in prompt
 
 
 def test_build_prompt_text_skips_inline_knowledge_when_disabled() -> None:
@@ -162,10 +164,10 @@ def test_build_prompt_text_skips_inline_knowledge_when_disabled() -> None:
     prompt = build_prompt_text(
         template=template,
         company_name="Acme",
-        job_description="Need Python.",
         inline_knowledge=False,
     )
 
+    assert "- `job_description.md` - Source of truth" in prompt
     assert "secret context" not in prompt
     assert "## Context Files" not in prompt
     assert "Write three summary options." in prompt

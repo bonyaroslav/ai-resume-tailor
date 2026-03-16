@@ -158,10 +158,26 @@ def inject_context(prompt: str, context_files: list[Path]) -> str:
     return "\n\n".join(sections).strip()
 
 
+def _build_attached_files_section(knowledge_files: list[Path]) -> str:
+    lines = [
+        "## Attached Files",
+        "",
+        "- `job_description.md` - Source of truth",
+    ]
+    for path in knowledge_files:
+        lines.append(f"- `{path.name}`")
+    lines.extend(
+        [
+            "",
+            "Use `job_description.md` as the source of truth for the target role.",
+        ]
+    )
+    return "\n".join(lines).strip()
+
+
 def build_prompt_text(
     template: PromptTemplate,
     company_name: str,
-    job_description: str,
     retry_note: str | None = None,
     *,
     inline_knowledge: bool = True,
@@ -170,14 +186,14 @@ def build_prompt_text(
     prompt_with_context = template.body.strip()
     if inline_knowledge:
         prompt_with_context = inject_context(template.body, template.knowledge_files)
-    runtime_fields = [
-        "## Runtime Input",
-        f"Company Name: {company_name}",
-        "Job Description:",
-        job_description,
+    sections = [
+        _build_attached_files_section(template.knowledge_files),
+        prompt_with_context,
     ]
+    runtime_fields = ["## Runtime Input", f"Company Name: {company_name}"]
     if skills_category_count is not None:
         runtime_fields.extend(["", f"Skills Category Count: {skills_category_count}"])
     if retry_note:
         runtime_fields.extend(["", "## User Retry Note", retry_note])
-    return "\n\n".join([prompt_with_context, "\n".join(runtime_fields)]).strip()
+    sections.append("\n".join(runtime_fields))
+    return "\n\n".join(sections).strip()

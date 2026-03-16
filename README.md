@@ -94,13 +94,13 @@ To complement the vision above, the current shipped V1 behavior is strict and de
 * **Strict AI response envelope:** `{"variations":[{"id","score_0_to_100","ai_reasoning","content_for_template"}]}`
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
-* **Run outputs:** `tailored_cv.docx`, `cover_letter.txt`, checkpoint + metadata + logs under `runs/...`
+* **Run outputs:** `tailored_cv.docx`, `cover_letter.txt`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
 
 Current CLI commands:
 
 ```sh
-python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
-python main.py run --jd-path ./inputs/job_description.txt --company "Stripe" --job-title "Senior Backend Engineer"
+python main.py run --jd-path ./inputs/job_description.md --company "Stripe"
+python main.py run --jd-path ./inputs/job_description.md --company "Stripe" --job-title "Senior Backend Engineer"
 python main.py resume --run-path ./runs/stripe
 # or
 python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
@@ -160,12 +160,12 @@ GEMINI_API_KEY=your_api_key_here
 **1. Start a New Tailoring Session:**
 
 ```sh
-python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
-python main.py run --jd-path ./inputs/job_description.txt --company "Stripe" --job-title "Senior Backend Engineer"
+python main.py run --jd-path ./inputs/job_description.md --company "Stripe"
+python main.py run --jd-path ./inputs/job_description.md --company "Stripe" --job-title "Senior Backend Engineer"
 
 ```
 
-`--jd-path` accepts `.txt` or `.docx`.
+`--jd-path` accepts `.txt` or `.md`. Each run stores the supplied text as `runs/<run_id>/job_description.md` and uploads that file fresh for the run-scoped cached content.
 
 ### One-Command Runner (Windows PowerShell)
 
@@ -187,7 +187,7 @@ Use deterministic local fixtures to validate end-to-end behavior (logs, checkpoi
 ```powershell
 $env:ART_OFFLINE_MODE="1"
 $env:ART_AUTO_APPROVE_REVIEW="1"
-python main.py run --jd-path .\inputs\job_description.txt --company "Offline Smoke"
+python main.py run --jd-path .\inputs\job_description.md --company "Offline Smoke"
 ```
 
 Default offline fixture file:
@@ -206,7 +206,7 @@ $env:ART_OFFLINE_FIXTURES_PATH="C:\path\to\fixtures.json"
 $env:GEMINI_API_KEY="your_api_key_here"
 Remove-Item Env:ART_OFFLINE_MODE -ErrorAction SilentlyContinue
 Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
-python main.py run --jd-path .\inputs\job_description.txt --company "Stripe"
+python main.py run --jd-path .\inputs\job_description.md --company "Stripe"
 ```
 
 Model can be changed locally via:
@@ -257,10 +257,10 @@ python main.py resume --checkpoint-path ./runs/stripe/state_checkpoint.json
 
 ```sh
 # Start run and make triage decision in CLI (continue_anyway/stop)
-python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+python main.py run --jd-path ./inputs/job_description.md --company "Stripe"
 
 # Optional: force non-interactive smoke path for triage + review
-# ART_TRIAGE_DECISION_MODE=always_continue ART_AUTO_APPROVE_REVIEW=1 python main.py run --jd-path ./inputs/job_description.txt --company "Stripe"
+# ART_TRIAGE_DECISION_MODE=always_continue ART_AUTO_APPROVE_REVIEW=1 python main.py run --jd-path ./inputs/job_description.md --company "Stripe"
 
 # Review current checkpoint state
 python main.py status --run-path ./runs/stripe
@@ -289,4 +289,6 @@ All personal receipts, skills, and base CV data live exclusively in the `knowled
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+
 

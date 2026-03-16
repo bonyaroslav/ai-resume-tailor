@@ -29,7 +29,7 @@ def _write_run_fixture(run_dir: Path, state: GraphState) -> None:
             "debug_mode": "false",
         },
     )
-    (run_dir / "job_description.txt").write_text(
+    (run_dir / "job_description.md").write_text(
         "Example job description.", encoding="utf-8"
     )
 

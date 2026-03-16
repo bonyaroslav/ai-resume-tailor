@@ -43,6 +43,8 @@ def _build_prompt_templates(run_dir: Path) -> dict[str, PromptTemplate]:
 
 
 def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext:
+    job_description_path = run_dir / "job_description.md"
+    job_description_path.write_text("Example JD", encoding="utf-8")
     context = RuntimeContext(
         run_dir=run_dir,
         checkpoint_path=run_dir / "state_checkpoint.json",
@@ -50,6 +52,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         output_cv_path=run_dir / "tailored_cv.docx",
         output_cover_letter_path=run_dir / "cover_letter.txt",
         company_name="Acme",
+        job_description_path=job_description_path,
         job_description="Example JD",
         api_key="test-key",
         model_name="fake-model",
@@ -480,3 +483,6 @@ def test_run_graph_passes_cached_content_and_skips_inline_knowledge(
     assert final_state.status == "completed"
     assert all(name == "cachedContents/abc123" for name in cached_names)
     assert all("inline context to skip" not in prompt for prompt in prompts_seen)
+    assert all(
+        "- `job_description.md` - Source of truth" in prompt for prompt in prompts_seen
+    )

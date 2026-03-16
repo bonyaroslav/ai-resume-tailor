@@ -77,6 +77,7 @@ class RuntimeContext:
     output_cv_path: Path
     output_cover_letter_path: Path
     company_name: str
+    job_description_path: Path
     job_description: str
     api_key: str
     model_name: str
@@ -315,7 +316,6 @@ async def _generate_section_variations(
     prompt = build_prompt_text(
         template=template,
         company_name=context.company_name,
-        job_description=context.job_description,
         retry_note=section_state.user_note,
         inline_knowledge=not context.use_role_wide_knowledge_cache,
         skills_category_count=(
@@ -447,7 +447,6 @@ async def _generate_triage_result(
     prompt = build_prompt_text(
         template=template,
         company_name=context.company_name,
-        job_description=context.job_description,
         retry_note=section_state.user_note,
         inline_knowledge=not context.use_role_wide_knowledge_cache,
     )

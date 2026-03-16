@@ -40,10 +40,10 @@ Use this first to validate workflow, logs, checkpointing, and DOCX output end-to
 ```powershell
 $env:ART_OFFLINE_MODE="1"
 $env:ART_AUTO_APPROVE_REVIEW="1"
-.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Offline Smoke"
+.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.md --company "Offline Smoke"
 ```
 
-`--jd-path` supports `.txt` and `.docx`.
+`--jd-path` supports `.txt` and `.md`. Each run writes `runs/<run_id>/job_description.md` and uploads that file fresh before requests.
 
 Expected artifacts under `runs/<run_id>/`:
 
@@ -51,6 +51,7 @@ Expected artifacts under `runs/<run_id>/`:
 - `state_checkpoint.json`
 - `tailored_cv.docx`
 - `cover_letter.txt`
+- `job_description.md`
 
 ## 6. Real Gemini run (AI Studio key)
 
@@ -58,7 +59,7 @@ Expected artifacts under `runs/<run_id>/`:
 $env:GEMINI_API_KEY="PASTE_YOUR_KEY"
 Remove-Item Env:ART_OFFLINE_MODE -ErrorAction SilentlyContinue
 Remove-Item Env:ART_AUTO_APPROVE_REVIEW -ErrorAction SilentlyContinue
-.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
+.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.md --company "Target Company"
 ```
 
 ### One-command local runner (recommended)
@@ -108,12 +109,12 @@ Run this sequence for a complete workflow: triage decision -> auto generation ->
 
 ```powershell
 # 1) Start run and choose triage decision in CLI (continue_anyway/stop)
-.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
+.\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.md --company "Target Company"
 
 # Optional non-interactive path (auto triage + auto review)
 # $env:ART_TRIAGE_DECISION_MODE="always_continue"
 # $env:ART_AUTO_APPROVE_REVIEW="1"
-# .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.txt --company "Target Company"
+# .\.venv\Scripts\python.exe main.py run --jd-path .\inputs\job_description.md --company "Target Company"
 
 # 2) Inspect run checkpoint status
 .\.venv\Scripts\python.exe main.py status --run-path .\runs\<company-slug>
@@ -175,3 +176,5 @@ $env:ART_UI_SCORE_STYLE="bold bright_magenta"
 - Billing model (free vs paid): https://ai.google.dev/gemini-api/docs/billing/
 - Pricing and model availability: https://ai.google.dev/pricing
 - Regional availability: https://ai.google.dev/gemini-api/docs/available-regions
+
+

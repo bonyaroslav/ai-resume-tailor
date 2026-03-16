@@ -5,9 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from knowledge_cache import (
-    compute_role_wide_knowledge_cache_fingerprint,
-    discover_role_wide_knowledge_files,
-    prewarm_role_wide_knowledge_cache,
+    compute_stable_knowledge_fingerprint,
+    discover_stable_knowledge_files,
+    prepare_run_scoped_knowledge_cache,
 )
 from prompt_loader import PromptTemplate
 from tests.test_support import make_workspace_temp_dir
@@ -24,7 +24,7 @@ def _template(
     )
 
 
-def test_discover_role_wide_knowledge_files_deduplicates_and_sorts() -> None:
+def test_discover_stable_knowledge_files_deduplicates_and_sorts() -> None:
     tmp_path = make_workspace_temp_dir("knowledge-cache-discovery")
     file_b = tmp_path / "b.md"
     file_a = tmp_path / "a.md"
@@ -43,7 +43,7 @@ def test_discover_role_wide_knowledge_files_deduplicates_and_sorts() -> None:
         ),
     }
 
-    discovered = discover_role_wide_knowledge_files(templates)
+    discovered = discover_stable_knowledge_files(templates)
 
     assert [item.path.name for item in discovered] == ["a.md", "b.md"]
 
@@ -60,16 +60,16 @@ def test_cache_fingerprint_changes_when_knowledge_content_changes() -> None:
         )
     }
 
-    first = compute_role_wide_knowledge_cache_fingerprint(
+    first = compute_stable_knowledge_fingerprint(
         role_name="role_a",
         model_name="gemini-test",
-        knowledge_files=discover_role_wide_knowledge_files(templates),
+        knowledge_files=discover_stable_knowledge_files(templates),
     )
     knowledge_file.write_text("second", encoding="utf-8")
-    second = compute_role_wide_knowledge_cache_fingerprint(
+    second = compute_stable_knowledge_fingerprint(
         role_name="role_a",
         model_name="gemini-test",
-        knowledge_files=discover_role_wide_knowledge_files(templates),
+        knowledge_files=discover_stable_knowledge_files(templates),
     )
 
     assert first != second
@@ -94,15 +94,15 @@ def test_cache_fingerprint_does_not_change_when_prompt_body_changes_only() -> No
         )
     }
 
-    first = compute_role_wide_knowledge_cache_fingerprint(
+    first = compute_stable_knowledge_fingerprint(
         role_name="role_a",
         model_name="gemini-test",
-        knowledge_files=discover_role_wide_knowledge_files(first_templates),
+        knowledge_files=discover_stable_knowledge_files(first_templates),
     )
-    second = compute_role_wide_knowledge_cache_fingerprint(
+    second = compute_stable_knowledge_fingerprint(
         role_name="role_a",
         model_name="gemini-test",
-        knowledge_files=discover_role_wide_knowledge_files(second_templates),
+        knowledge_files=discover_stable_knowledge_files(second_templates),
     )
 
     assert first == second
@@ -160,10 +160,12 @@ class _FakeClient:
         self.caches = _FakeCachesApi()
 
 
-def test_prewarm_role_wide_knowledge_cache_reuses_existing_remote_file() -> None:
+def test_prepare_run_scoped_knowledge_cache_reuses_existing_remote_file() -> None:
     tmp_path = make_workspace_temp_dir("knowledge-cache-reuse")
     knowledge_file = tmp_path / "rules.md"
     knowledge_file.write_text("same", encoding="utf-8")
+    job_description_path = tmp_path / "job_description.md"
+    job_description_path.write_text("Need Python", encoding="utf-8")
     templates = {
         "section_professional_summary": _template(
             "section_professional_summary",
@@ -173,37 +175,32 @@ def test_prewarm_role_wide_knowledge_cache_reuses_existing_remote_file() -> None
     }
     client = _FakeClient()
     existing_remote = client.files.upload(file=str(knowledge_file))
-    discovered = discover_role_wide_knowledge_files(templates)
+    discovered = discover_stable_knowledge_files(templates)
 
     registry_path = tmp_path / "registry.json"
     registry_path.write_text(
         f"""{{
-  "entries": [
+  \"knowledge_files\": [
     {{
-      "role_name": "role_a",
-      "model_name": "gemini-test",
-      "fingerprint": "old",
-      "knowledge_files": [
-        {{
-          "path": "{discovered[0].relative_path}",
-          "sha256": "{discovered[0].sha256}",
-          "remote_file_name": "{existing_remote.name}",
-          "remote_file_uri": "{existing_remote.uri}",
-          "mime_type": "{existing_remote.mime_type}"
-        }}
-      ],
-      "cache": {{}}
+      \"path\": \"{discovered[0].relative_path}\",
+      \"sha256\": \"{discovered[0].sha256}\",
+      \"remote_file_name\": \"{existing_remote.name}\",
+      \"remote_file_uri\": \"{existing_remote.uri}\",
+      \"mime_type\": \"{existing_remote.mime_type}\"
     }}
-  ]
+  ],
+  \"run_caches\": []
 }}""",
         encoding="utf-8",
     )
 
-    prewarm_role_wide_knowledge_cache(
+    prepare_run_scoped_knowledge_cache(
         api_key="test-key",
+        run_id="run-1",
         role_name="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
+        job_description_path=job_description_path,
         registry_path=registry_path,
         ttl_seconds=300,
         invalidate_cache=False,
@@ -212,13 +209,15 @@ def test_prewarm_role_wide_knowledge_cache_reuses_existing_remote_file() -> None
         client_factory=lambda _: client,
     )
 
-    assert client.files.upload_calls == [str(knowledge_file)]
+    assert client.files.upload_calls == [str(knowledge_file), str(job_description_path)]
 
 
-def test_prewarm_role_wide_knowledge_cache_force_reupload_uploads_again() -> None:
+def test_prepare_run_scoped_knowledge_cache_force_reupload_uploads_again() -> None:
     tmp_path = make_workspace_temp_dir("knowledge-cache-force-reupload")
     knowledge_file = tmp_path / "rules.md"
     knowledge_file.write_text("same", encoding="utf-8")
+    job_description_path = tmp_path / "job_description.md"
+    job_description_path.write_text("Need Python", encoding="utf-8")
     templates = {
         "section_professional_summary": _template(
             "section_professional_summary",
@@ -228,37 +227,32 @@ def test_prewarm_role_wide_knowledge_cache_force_reupload_uploads_again() -> Non
     }
     client = _FakeClient()
     existing_remote = client.files.upload(file=str(knowledge_file))
-    discovered = discover_role_wide_knowledge_files(templates)
+    discovered = discover_stable_knowledge_files(templates)
 
     registry_path = tmp_path / "registry.json"
     registry_path.write_text(
         f"""{{
-  "entries": [
+  \"knowledge_files\": [
     {{
-      "role_name": "role_a",
-      "model_name": "gemini-test",
-      "fingerprint": "old",
-      "knowledge_files": [
-        {{
-          "path": "{discovered[0].relative_path}",
-          "sha256": "{discovered[0].sha256}",
-          "remote_file_name": "{existing_remote.name}",
-          "remote_file_uri": "{existing_remote.uri}",
-          "mime_type": "{existing_remote.mime_type}"
-        }}
-      ],
-      "cache": {{}}
+      \"path\": \"{discovered[0].relative_path}\",
+      \"sha256\": \"{discovered[0].sha256}\",
+      \"remote_file_name\": \"{existing_remote.name}\",
+      \"remote_file_uri\": \"{existing_remote.uri}\",
+      \"mime_type\": \"{existing_remote.mime_type}\"
     }}
-  ]
+  ],
+  \"run_caches\": []
 }}""",
         encoding="utf-8",
     )
 
-    prewarm_role_wide_knowledge_cache(
+    prepare_run_scoped_knowledge_cache(
         api_key="test-key",
+        run_id="run-1",
         role_name="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
+        job_description_path=job_description_path,
         registry_path=registry_path,
         ttl_seconds=300,
         invalidate_cache=False,
@@ -267,6 +261,9 @@ def test_prewarm_role_wide_knowledge_cache_force_reupload_uploads_again() -> Non
         client_factory=lambda _: client,
     )
 
-    assert len(client.files.upload_calls) == 2
+    assert len(client.files.upload_calls) == 3
     assert Path(client.files.upload_calls[0]).resolve() == knowledge_file.resolve()
     assert Path(client.files.upload_calls[1]).resolve() == knowledge_file.resolve()
+    assert (
+        Path(client.files.upload_calls[2]).resolve() == job_description_path.resolve()
+    )
