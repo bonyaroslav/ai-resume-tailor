@@ -31,6 +31,7 @@ class KnowledgeFileDescriptor:
 class RunScopedKnowledgeCache:
     remote_cache_name: str
     expires_at: str | None
+    stable_fingerprint: str
     job_description_sha256: str
 
 
@@ -404,30 +405,48 @@ def prepare_run_scoped_knowledge_cache(
             model_name=model_name,
         )
         if existing_run_cache is not None:
-            remote_cache_name = existing_run_cache.get("cache", {}).get(
-                "remote_cache_name"
+            # Reuse is only safe when the run identity and the exact JD content
+            # still match. This keeps reruns with a reused run_id from silently
+            # binding to stale cached content after the JD changes.
+            existing_job_description_sha256 = existing_run_cache.get(
+                "job_description_sha256"
             )
-            if isinstance(remote_cache_name, str) and remote_cache_name:
-                confirmed_cache = _confirm_remote_cache(client, remote_cache_name)
-                if confirmed_cache is not None:
-                    expires_at = _to_iso8601(
-                        getattr(confirmed_cache, "expire_time", None)
-                    )
-                    logger.info(
-                        "Run cache reuse run_id=%s remote_cache_name=%s expires_at=%s",
-                        run_id,
-                        remote_cache_name,
-                        expires_at or "-",
-                    )
-                    return RunScopedKnowledgeCache(
-                        remote_cache_name=remote_cache_name,
-                        expires_at=expires_at,
-                        job_description_sha256=job_description_sha256,
-                    )
-            logger.info(
-                "Run cache recreate required because cached content was unavailable. run_id=%s",
-                run_id,
-            )
+            if existing_job_description_sha256 != job_description_sha256:
+                logger.info(
+                    "Run cache recreate required because job description changed. run_id=%s stored_job_description_sha256=%s current_job_description_sha256=%s",
+                    run_id,
+                    existing_job_description_sha256 or "-",
+                    job_description_sha256,
+                )
+            else:
+                remote_cache_name = existing_run_cache.get("cache", {}).get(
+                    "remote_cache_name"
+                )
+                if isinstance(remote_cache_name, str) and remote_cache_name:
+                    confirmed_cache = _confirm_remote_cache(client, remote_cache_name)
+                    if confirmed_cache is not None:
+                        expires_at = _to_iso8601(
+                            getattr(confirmed_cache, "expire_time", None)
+                        )
+                        logger.info(
+                            "Run cache reuse run_id=%s remote_cache_name=%s expires_at=%s",
+                            run_id,
+                            remote_cache_name,
+                            expires_at or "-",
+                        )
+                        return RunScopedKnowledgeCache(
+                            remote_cache_name=remote_cache_name,
+                            expires_at=expires_at,
+                            stable_fingerprint=str(
+                                existing_run_cache.get("stable_fingerprint")
+                                or stable_fingerprint
+                            ),
+                            job_description_sha256=job_description_sha256,
+                        )
+                logger.info(
+                    "Run cache recreate required because cached content was unavailable. run_id=%s",
+                    run_id,
+                )
 
     stable_records = _resolve_stable_remote_files(
         client=client,
@@ -494,5 +513,6 @@ def prepare_run_scoped_knowledge_cache(
     return RunScopedKnowledgeCache(
         remote_cache_name=confirmed_cache.name,
         expires_at=expires_at,
+        stable_fingerprint=stable_fingerprint,
         job_description_sha256=job_description_sha256,
     )
