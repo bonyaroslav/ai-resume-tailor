@@ -574,9 +574,9 @@ async def _ensure_role_wide_knowledge_cache(
     )
     context.cached_content_name = cache.remote_cache_name
     logger.info(
-        "Knowledge cache ready remote_cache_name=%s fingerprint=%s expires_at=%s",
+        "Knowledge cache ready remote_cache_name=%s stable_fingerprint=%s expires_at=%s",
         cache.remote_cache_name,
-        cache.fingerprint,
+        cache.stable_fingerprint,
         cache.expires_at or "-",
     )
 

@@ -7,9 +7,11 @@ from pathlib import Path
 from docx import Document
 
 import graph_nodes
+import main as main_module
 from checkpoint import load_checkpoint
 from graph_nodes import RuntimeContext
 from graph_state import GraphState, create_initial_state
+from knowledge_cache import RunScopedKnowledgeCache
 from llm_client import LlmGenerationResult, UsageMetadata
 from main import _run_graph
 from prompt_loader import PromptTemplate
@@ -486,3 +488,74 @@ def test_run_graph_passes_cached_content_and_skips_inline_knowledge(
     assert all(
         "- `job_description.md` - Source of truth" in prompt for prompt in prompts_seen
     )
+
+
+def test_run_graph_prepares_role_wide_knowledge_cache_before_generation(
+    monkeypatch: object,
+) -> None:
+    run_dir = make_workspace_temp_dir("integration-mocked-cache-prepare")
+    template_path = run_dir / "template.docx"
+    _make_template(template_path)
+    context = _build_runtime_context(run_dir, template_path)
+    context.use_role_wide_knowledge_cache = True
+    context.auto_approve_review = True
+    context.triage_decision_mode = "always_continue"
+    state: GraphState = create_initial_state("integration-run-5")
+    prepared_cache_calls: list[dict[str, str]] = []
+    cached_names: list[str | None] = []
+
+    def fake_prepare_run_scoped_knowledge_cache(
+        **kwargs: object,
+    ) -> RunScopedKnowledgeCache:
+        prepared_cache_calls.append(
+            {
+                "run_id": str(kwargs["run_id"]),
+                "role_name": str(kwargs["role_name"]),
+                "model_name": str(kwargs["model_name"]),
+            }
+        )
+        return RunScopedKnowledgeCache(
+            remote_cache_name="cachedContents/prepared-123",
+            expires_at="2026-03-16T15:09:29Z",
+            stable_fingerprint="fingerprint-123",
+            job_description_sha256="jd-sha-123",
+        )
+
+    async def fake_generate_with_gemini(
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+        skills_category_count: int = 4,
+    ) -> LlmGenerationResult:
+        assert api_key == "test-key"
+        assert model == "fake-model"
+        assert skills_category_count == 4
+        cached_names.append(cached_content_name)
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        return _result(_fake_response_for_section(resolved_section_id), cached_tokens=9)
+
+    monkeypatch.setattr(
+        main_module,
+        "prepare_run_scoped_knowledge_cache",
+        fake_prepare_run_scoped_knowledge_cache,
+    )
+    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda _: (_ for _ in ()).throw(AssertionError("input should not be called")),
+    )
+
+    final_state = asyncio.run(_run_graph(state, context))
+
+    assert final_state.status == "completed"
+    assert prepared_cache_calls == [
+        {
+            "run_id": "integration-run-5",
+            "role_name": "role_senior_dotnet_engineer",
+            "model_name": "fake-model",
+        }
+    ]
+    assert context.cached_content_name == "cachedContents/prepared-123"
+    assert all(name == "cachedContents/prepared-123" for name in cached_names)
