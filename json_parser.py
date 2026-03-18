@@ -13,6 +13,7 @@ from section_ids import is_experience_section
 
 _TRAILING_COMMA_PATTERN = re.compile(r",(\s*[}\]])")
 _LEADING_BULLET_PATTERN = re.compile(r"^\s*(?:[-*]+|\d+[.)])\s*")
+_EXPERIENCE_VARIATION_SUFFIX_PATTERN = re.compile(r"^[A-Za-z0-9_-]*?([A-Za-z])$")
 _SKILLS_SECTION_ID = "section_skills_alignment"
 _DEFAULT_SKILLS_CATEGORY_COUNT = 4
 
@@ -36,6 +37,14 @@ def _format_experience_bullet(text: str) -> str:
     collapsed = " ".join(parts).strip()
     normalized = _LEADING_BULLET_PATTERN.sub("", collapsed).strip()
     return f"- {normalized}"
+
+
+def _canonicalize_experience_variation_id(variation_id: str) -> str:
+    normalized_id = variation_id.strip()
+    match = _EXPERIENCE_VARIATION_SUFFIX_PATTERN.match(normalized_id)
+    if not match:
+        return normalized_id
+    return match.group(1).upper()
 
 
 def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, object]:
@@ -94,7 +103,7 @@ def _normalize_experience_envelope(parsed: dict[str, object]) -> dict[str, objec
                     f"(bullet={bullet_index}, variation={variation_index})."
                 )
 
-            normalized_id = variation_id.strip()
+            normalized_id = _canonicalize_experience_variation_id(variation_id)
             variation_ids_for_bullet.append(normalized_id)
             per_variation_text.setdefault(normalized_id, []).append(
                 _format_experience_bullet(text)

@@ -39,6 +39,7 @@ from json_parser import (
 from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_gemini
 from logging_utils import log_failure
 from prompt_loader import PromptTemplate, build_prompt_text
+from section_ids import is_experience_section
 from workflow_definition import (
     AUDIT_SECTION_ID,
     COVER_LETTER_SECTION_ID,
@@ -116,6 +117,19 @@ def _find_variation(variations: list[Variation], variation_id: str) -> Variation
         if variation.id == variation_id:
             return variation
     return None
+
+
+def _experience_schema_retry_note(
+    error: Exception | None, section_id: str
+) -> str | None:
+    if error is None or not is_experience_section(section_id):
+        return None
+    if "ordered variation ids" not in str(error):
+        return None
+    return (
+        "Schema correction: reuse the same variation ids for every bullet in the same "
+        "order. Prefer A, B, C without bullet-number prefixes such as 1A or 2B."
+    )
 
 
 def _best_variation(variations: list[Variation]) -> Variation:
@@ -335,21 +349,28 @@ async def _generate_section_variations(
     logger: logging.Logger,
 ) -> list[Variation]:
     template = context.prompt_templates[section_id]
-    prompt = build_prompt_text(
-        template=template,
-        company_name=context.company_name,
-        retry_note=section_state.user_note,
-        inline_knowledge=not context.use_role_wide_knowledge_cache,
-        skills_category_count=(
-            context.skills_category_count
-            if section_id == "section_skills_alignment"
-            else None
-        ),
-    )
-    render_prompt(section_id, prompt)
-
     last_error: Exception | None = None
     for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
+        retry_note = section_state.user_note
+        schema_retry_note = _experience_schema_retry_note(last_error, section_id)
+        if schema_retry_note:
+            retry_note = (
+                f"{retry_note}\n\n{schema_retry_note}"
+                if retry_note
+                else schema_retry_note
+            )
+        prompt = build_prompt_text(
+            template=template,
+            company_name=context.company_name,
+            retry_note=retry_note,
+            inline_knowledge=not context.use_role_wide_knowledge_cache,
+            skills_category_count=(
+                context.skills_category_count
+                if section_id == "section_skills_alignment"
+                else None
+            ),
+        )
+        render_prompt(section_id, prompt)
         try:
             result = await _request_llm(
                 prompt=prompt,

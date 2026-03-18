@@ -5,11 +5,11 @@ $RunnerConfig = @{
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Mindera.md"
-    CompanyName = "Mindera."
-    JobTitle = "NET_Generative_AI"
-    OutputCvFileName = "tailored_cv.docx"
-    TierName = "model_flash"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ DotLinkers SRE.md"
+    CompanyName = "DotLinkers"
+    JobTitle = "SRE"
+    OutputCvFileName = "Senior Software Engineer - YB.docx"
+    TierName = "freetier"
     RoleName = "role_senior_dotnet_engineer"
 
     # Manual override for the selected tier model.
