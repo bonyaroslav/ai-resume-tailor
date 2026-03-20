@@ -1,328 +1,437 @@
-## Module: Canonical Software Engineer CV Bullet Points
+# Engineering Manager Bullet Point Knowledge File
 
-ATS-friendly + hiring-manager readable + universal for IC engineers
+Purpose: a reusable knowledge file for AI systems that must generate truthful, ATS-friendly, recruiter-relevant resume bullet points for Software Engineering Manager and related leadership roles.
 
-### Purpose
-
-Generate strong, truthful work-experience bullet points for software engineers that:
-
-* parse cleanly in ATS
-* match the target job description naturally
-* show concrete technical contribution
-* read fast for human reviewers
-* remain easy to defend in interviews
-
-This module is for general software engineers and should stay universal. Do not assume any specific career transition story.
+Use this file to generate bullets from:
+- a target job description
+- verified candidate accomplishments
+- a skills matrix with depth, confidence, and recency
+- optional context on team size, architecture ownership, hiring, mentoring, delivery, stakeholders, and business scope
 
 ---
 
-## 0) Definition of done
+## 1) Core principle
 
-For each role:
+For Engineering Manager roles, bullets should prove the candidate delivers engineering outcomes **through leadership**, not only through individual execution.
 
-* Usually keep each variation of bullet to 1–2 sentences
-* Every bullet must be interviewable and factually defensible
-* Prioritize relevant, high-impact accomplishments first
+The default target is a balanced mix of:
+- delivery and execution
+- technical direction
+- people leadership
+- operational excellence
+- stakeholder and business impact
 
-If the user asks for a short version:
-
-* Use 3–5 bullets maximum for the role
-
----
-
-## 1) Core rule
-
-A strong bullet describes:
-
-* what you changed
-* how you changed it
-* why it mattered
-
-Default pattern:
-
-* Action + technical context + result
-
-Good bullet shapes:
-
-* Built [component/system] using [relevant tech], reducing [problem] by [metric/result]
-* Optimized [service/query/pipeline], improving [latency/reliability/cost] from [before] to [after]
-* Automated [process], cutting [manual effort/failures/time] by [result]
-* Hardened [area], reducing [risk/errors/incidents] and improving [outcome]
-
-Do not force one sentence template, but keep punctuation ATS-safe and simple.
+Adjust the mix based on the job description.
 
 ---
 
-## 2) What each bullet should contain
+## 2) What makes EM bullets different from IC bullets
 
-Aim for 3–5 of these signals per bullet:
+IC bullets usually center on personal implementation, technical problem solving, and direct feature or system contribution.
 
-* strong action verb
-* concrete technical object
-* relevant method or technology
-* measurable result or visible effect
-* scale, complexity, or constraint
+EM bullets should instead emphasize one or more of the following:
+- ownership of team or program outcomes
+- technical leadership and decision quality
+- roadmap execution across functions
+- people growth, hiring, coaching, succession, or org health
+- delivery predictability, risk reduction, quality, and reliability
+- influence across Product, Design, Architecture, Security, Data, SRE, or executives
 
-Examples of strong technical objects:
-
-* API
-* microservice
-* background worker
-* event pipeline
-* database query
-* deployment pipeline
-* observability stack
-* integration
-* cache
-* data model
-* migration
-
-Examples of strong action verbs:
-
-* built
-* designed
-* implemented
-* optimized
-* automated
-* migrated
-* debugged
-* hardened
-* instrumented
-* refactored
-* stabilized
-* simplified
+An EM bullet may still mention hands-on contribution, but only when relevant to the target role and only as part of a broader leadership story.
 
 ---
 
-## 3) Results that count
+## 3) First classify the target role
 
-Prefer results that show engineering impact:
+Before writing bullets, classify the target role from the JD.
 
-Reliability
+### A. Hands-on EM
+Signals:
+- architecture, system design, code reviews, design reviews
+- deep stack requirements
+- modernization, migration, platform rebuilds
+- expectation to dive into code or unblock technical decisions
 
-* incident reduction
-* lower error rate
-* better uptime
-* lower MTTR
-* fewer failed jobs or retries
+Bullet emphasis:
+- technical direction
+- architecture and execution
+- delivery and reliability
+- selective hands-on credibility
+- team leadership as supporting evidence
 
-Performance
+### B. Balanced EM
+Signals:
+- team leadership plus roadmap ownership
+- delivery, product strategy, stakeholder alignment
+- technical credibility required, but not daily coding focus
 
-* lower p95/p99 latency
-* faster query time
-* better throughput
-* lower queue lag
-* lower CPU or memory pressure
+Bullet emphasis:
+- delivery outcomes
+- cross-functional leadership
+- technical direction
+- coaching and team development
+- business impact
 
-Delivery and developer experience
+### C. Manager-heavy EM / Senior EM
+Signals:
+- multiple teams or managers
+- org design, leadership pipeline, KPI ownership
+- executive communication
+- broader planning and resourcing
 
-* faster CI/CD
-* shorter lead time
-* fewer escaped defects
-* reduced build or test time
-* safer releases
-
-Cost and efficiency
-
-* reduced cloud spend
-* lower database load
-* fewer support hours
-* less manual work
-
-Security and risk
-
-* remediated vulnerabilities
-* hardened auth or secrets handling
-* improved audit readiness
-* reduced exposure to failure modes
-
-Truth rule:
-
-* Use exact numbers when known
-* If the number is approximate, mark it honestly: ~, approx., over, more than, from X to Y, hours to minutes
-* Never invent precision
+Bullet emphasis:
+- org scope
+- operating model and execution discipline
+- manager or lead development
+- hiring, retention, succession
+- cross-org alignment and strategic outcomes
 
 ---
 
-## 4) ATS tailoring workflow
+## 4) Input handling rules
 
-### Step A: extract target signals from the job description
+Use only facts the candidate can defend in an interview.
 
-Create two buckets:
+### Use strongly
+- verified accomplishments with clear ownership
+- recent and relevant evidence
+- scope notes such as team size, platform criticality, budget sensitivity, or business reach
+- metrics with known meaning and credible linkage to the candidate’s work
 
-A-rank
+### Use carefully
+- shared team outcomes where candidate influence is real but not exclusive
+- architecture involvement when the candidate shaped decisions, standards, reviews, or trade-offs
+- technical skills that are real but not central to the achievement
 
-* top repeated must-have skills
-* core responsibilities
-* main technologies
-* domain-critical terms
+### Do not use as flagship evidence
+- stale skills with weak recency
+- shallow exposure presented as strong ownership
+- inflated claims about strategy, org leadership, or business impact
+- metrics without causal connection
 
-B-rank
-
-* secondary tools
-* adjacent practices
-* supporting domain terms
-
-### Step B: map achievements to those signals
-
-For each candidate bullet, check:
-
-* direct A-rank match
-* secondary B-rank match
-* clear outcome
-* seniority or complexity signal
-* technical relevance
-
-### Step C: curate, do not stuff
-
-Draft more bullets than needed, then keep the strongest mix:
-
-* highest relevance to the JD
-* strongest proof of impact
-* enough variety across systems and results
-* minimal repetition of the same keyword or story
-
-Surface relevant skills clearly without keyword stuffing.
-
-
+If a fact is unknown, prefer a truthful scope phrase over a fabricated number.
 
 ---
 
-## 5) Ordering rules
+## 5) Bullet selection logic
 
-Within each role, order bullets roughly like this:
+Choose bullets from these evidence buckets, weighted by the JD.
 
-1. strongest JD-aligned impact
-2. second strongest impact
-3. architecture, scale, or design contribution
-4. reliability or performance work
-5. automation or developer productivity
-6. collaboration or mentoring only if it adds technical value
+1. **Delivery / execution**
+   - shipped major programs
+   - improved predictability
+   - unblocked cross-team execution
+   - reset priorities or execution model
 
-Put the most relevant proof first. Recruiters and hiring managers skim.
+2. **Technical direction**
+   - shaped architecture
+   - drove modernization or platform decisions
+   - reduced technical risk or debt
+   - improved engineering standards, design quality, or review discipline
 
----
+3. **People leadership**
+   - hired, coached, mentored, developed leads
+   - improved performance management or growth paths
+   - retained and stabilized a team
+   - grew ownership and autonomy
 
-## 6) Formatting guardrails
+4. **Operational excellence**
+   - reliability, observability, incident reduction
+   - on-call maturity
+   - release quality
+   - recovery time or change safety
 
-Use resume formatting that ATS can parse cleanly:
+5. **Business / stakeholder impact**
+   - aligned engineering with product outcomes
+   - managed trade-offs with stakeholders
+   - improved adoption, speed to market, cost profile, or risk posture
 
-* reverse-chronological work history
-* standard section headings
-* simple bullet formatting
-* standard fonts
-* no tables or decorative layouts inside experience
-* one idea per bullet
-* consistent past tense, keep in consistent
-
-Use only standard punctuation and bullet characters in final resume text.
-Prefer words over symbolic implication.
-Avoid arrows and decorative symbols such as: →, ⇒, ->, ✓, |, emojis, icon bullets, stars, diamonds, and checkboxes.
-Prefer phrasing like: “resulting in”, “which reduced”, “which improved”, “from X to Y”.
-
-For resume-level alignment:
-
-* use the exact target job title near the top if truthful
-* keep relevant keywords in the skills section and reinforce them in experience bullets
-* prefer familiar section names
-
-
-When an acronym is important for ATS matching, spell out the full term once and include the acronym in parentheses when natural.
-Example: “Amazon Web Services (AWS)”
-But not such well known words like API.
+A good EM resume usually has multiple buckets represented, but the proportions must follow the target job.
 
 ---
 
-## 7) Anti-generic rules
+## 6) Recommended bullet structure
 
-Do not write bullets that sound interchangeable.
+Use this structure:
 
-Avoid:
+**[Action verb] + [what was led or changed] + [scope/context] + [result/impact]**
 
-* vague responsibility bullets with no result
-* buzzwords without proof
-* repeated sentence rhythm across every bullet
-* inflated claims you cannot explain
-* filler phrases like “dynamic,” “innovative,” “cross-functional,” “exceeding stakeholder expectations,” unless they are tied to concrete evidence
+Good bullets quickly answer:
+- What did the candidate own?
+- What was the scope or complexity?
+- What changed because of their leadership?
+- Why is this relevant to the target role?
 
-Be carefull and avoid a generic, buzzword-heavy, inconsistent AI-written resumes. 
+### Preferred pattern
+- Led / built / scaled / restructured / modernized / established / coached / hired / aligned / improved / reduced / accelerated / stabilized
 
----
-
-## 8) Preferred evidence hierarchy inside bullets
-
-Best
-
-* metric with concrete result
-* before and after comparison
-* scale plus outcome
-* technical change plus business effect
-
-Good
-
-* clear technical contribution with visible effect
-* reduced pain, improved reliability, enabled delivery
-
-Weak
-
-* responsibility-only statement
-* stack-only statement
-* generic teamwork statement
-* buzzword claim with no proof
-
-Examples:
-
-* Strong: Optimized SQL queries and indexing for a high-traffic API, reducing p95 response time from 780 ms to 240 ms
-* Strong: Automated deployment validation checks, cutting failed releases by 40%
-* Weak: Responsible for backend performance improvements
-* Weak: Worked in an agile team on cloud solutions
+### Example shape
+- Led [team/program/platform] through [change or challenge], aligning [functions/teams] and improving [delivery/reliability/business metric] for [product/domain/customer impact].
 
 ---
 
-## 9) Per-bullet quality check
+## 7) Metrics guidance
 
-Before finalizing a bullet, ask:
+Prefer outcomes over raw activity.
 
-1. Does it name a real system, component, or process?
-2. Does it show my technical contribution clearly? (If no, try to rewrite)
-3. Does it include a result or concrete effect?  (If no, try to rewrite)
-4. Does it match the target role naturally?
-5. Could I explain it confidently in an interview? (If no, try to rewrite)
-6. Is it more specific than a generic AI-generated bullet?
-7. Is it different enough from the other bullets?
+### Best metrics for EM bullets
+1. **Business or customer outcomes**
+   - adoption
+   - revenue influence
+   - cost reduction
+   - retention
+   - customer satisfaction
+   - risk reduction
+
+2. **Delivery and reliability outcomes**
+   - lead time
+   - deployment frequency
+   - change failure rate
+   - time to restore service / recovery time
+   - incident reduction
+   - rework reduction
+
+3. **Org and team outcomes**
+   - team size led
+   - hiring scale
+   - promotions or lead development
+   - retention improvement
+   - expanded ownership or coverage
+
+4. **Truthful scope signals when numbers are unavailable**
+   - business-critical platform
+   - multi-team dependency surface
+   - regulated or high-availability environment
+   - customer-facing critical workflow
+   - international or distributed team complexity
+
+### Avoid as primary proof
+- commit count
+- PR volume
+- ticket count
+- lines of code
+- number of meetings
+
+Use such activity metrics only if they support a broader, defensible outcome.
 
 ---
 
-## 10) Output protocol for bullet generation
+## 8) Skills matrix usage
 
-When generating variation of bullet for a role as described in main-parent prompt:
+The skills matrix should shape wording and bullet choice, not force artificial keyword stuffing.
 
-1. Read the JD and extract A-rank and B-rank terms
-2. Draft a larger candidate pool
-3. Curate to the strongest final set
-4. Keep bullets concise and non-repetitive
-5. Prefer conservative, defensible wording over exaggerated wording
-6. If requested, provide:
+### Put inside bullets
+- strong, recent, job-relevant skills that were central to the accomplishment
+- technologies or domains explicitly required by the JD and genuinely used by the candidate
 
-   * one safer version
-   * one slightly stronger version
-   * one alternative rewrite for the top bullet
+### Keep secondary
+- adjacent tools or frameworks that were present but not central
+- older skills that still help ATS coverage but are not major selling points
 
----
+### Keep out of flagship bullets
+- low-confidence skills
+- outdated skills with little recency
+- technologies the candidate only observed or lightly touched
 
-## 11) Source notes
-
-Use these sources as supporting evidence, not as rigid law:
-
-* Tech Interview Handbook: strong for ATS-safe tech resume structure, work experience format, accomplishments, and keyword optimization ([techinterviewhandbook.org][1])
-* Jobscan: strong for JD keyword alignment, exact job title matching, and accomplishment-focused work experience ([Jobscan][4])
-* Toptal Tech Resume guidance: strong for reverse-chronological format, ATS readability, and emphasizing results over responsibilities ([toptal.com][5])
-* Business Insider: useful as a cautionary signal about generic AI-written phrasing, not as a primary resume standard ([Business Insider][2])
+For manager-heavy roles, do not overload bullets with stack names unless the JD clearly asks for technical depth.
 
 ---
 
-[1]: https://www.techinterviewhandbook.org/resume/ "Practical guide to writing FAANG-ready software engineer resumes | Tech Interview Handbook"
-[2]: https://www.businessinsider.com/recruiters-job-search-resume-interview-ai-2025-7 "Recruiters to Job Searchers: Don't Act Like AI, Even If Use It - Business Insider"
-[3]: https://www.jobscan.co/blog/20-ats-friendly-resume-templates/ "ATS-Friendly Resume in 2026 | How to Write Your Resume"
-[4]: https://www.jobscan.co/blog/writing-your-resume-work-experience/ "How to Describe Work Experience on Your Resume (+Examples)"
-[5]: https://www.toptal.com/techresume/career-advice/the-perfect-tech-resume-in-2025-key-trends-ats-keywords-and-formatting-tips "The Perfect Tech Resume in 2025: Key Trends, ATS Keywords, and Formatting Tips"
+## 9) Keyword alignment rules
+
+Use keywords naturally, inside real evidence.
+
+### Do
+- mirror important JD terminology when accurate
+- use standard market language for title and domain terms
+- include relevant acronyms and full forms where normal
+- spread keywords across bullets and skills sections
+
+### Do not
+- paste JD phrases without evidence
+- overload every bullet with the same stack words
+- add technologies the candidate cannot discuss fluently
+- write bullets that sound optimized for ATS but weak to a recruiter
+
+Target keyword alignment should improve discoverability without reducing credibility.
+
+---
+
+## 10) Strong vs weak bullet test
+
+### Strong bullet
+A strong EM bullet is:
+- specific
+- scoped
+- outcome-led
+- relevant to the target JD
+- truthful and interview-defensible
+- written in plain language with credible verbs
+
+### Weak bullet
+A weak EM bullet is:
+- responsibility-only
+- vague or generic
+- inflated
+- stack-heavy without leadership signal
+- missing scope or outcome
+- impossible to defend under follow-up questioning
+
+### Reject patterns like
+- Managed team and delivered projects
+- Worked with stakeholders on roadmap items
+- Helped improve architecture
+- Responsible for Agile ceremonies and sprint planning
+
+### Prefer patterns like
+- Led a distributed team through platform modernization, improving release confidence and reducing operational risk for a business-critical service.
+- Partnered with Product and Architecture to reset roadmap scope, remove delivery blockers, and improve execution predictability across dependent teams.
+- Hired and coached engineers and tech leads, increasing team ownership and strengthening succession capacity in a fast-changing environment.
+
+---
+
+## 11) Writing rules for the AI
+
+1. Do not invent facts, numbers, titles, or scope.
+2. Do not convert a weak accomplishment into a bold claim.
+3. Prefer precise language over hype.
+4. Prefer outcomes over duties.
+5. Use metrics when credible; otherwise use truthful scope.
+6. Balance people, delivery, and technical leadership according to the JD.
+7. Preserve interview defensibility.
+8. If evidence is thin, write a narrower bullet rather than an inflated one.
+9. Keep bullets concise, but not so compressed that scope and result disappear.
+10. Make the resume readable by both ATS and human reviewers.
+
+---
+
+## 12) Rewriting heuristics
+
+When converting raw evidence into bullets:
+
+### Step 1
+Identify the real achievement:
+- what changed
+- who was affected
+- what the candidate actually owned
+
+### Step 2
+Label the achievement type:
+- delivery
+- technical direction
+- people leadership
+- operational excellence
+- business impact
+
+### Step 3
+Add scope:
+- team size
+- platform criticality
+- stakeholder breadth
+- program complexity
+- cross-team coordination
+
+### Step 4
+Add impact:
+- quantified result if available
+- otherwise defensible improvement statement
+
+### Step 5
+Tune to the JD:
+- move technical detail up for hands-on EM roles
+- keep balanced distribution for mixed EM roles
+- move org leadership and KPI language up for senior manager roles
+
+---
+
+## 13) Before / after examples
+
+### Example 1
+Weak:
+- Managed backend team and supported deliveries.
+
+Stronger:
+- Led a backend engineering team delivering [platform/domain] priorities, aligned execution across [Product/Architecture/Operations], and improved [delivery predictability/reliability/customer outcome] for a business-critical workflow.
+
+### Example 2
+Weak:
+- Helped with architecture and code reviews.
+
+Stronger:
+- Set technical direction for [service/platform], using design and code reviews to improve engineering standards, reduce operational risk, and enable safer delivery across [team/program scope].
+
+### Example 3
+Weak:
+- Mentored engineers and improved team culture.
+
+Stronger:
+- Hired and coached [engineers/tech leads], introduced clearer ownership and feedback loops, and strengthened [retention/promotion readiness/team autonomy] during [growth/change/reorganization].
+
+### Example 4
+Weak:
+- Worked with stakeholders to prioritize work.
+
+Stronger:
+- Partnered with Product and cross-functional stakeholders to turn ambiguous business needs into an executable roadmap, clarify trade-offs, and deliver [platform/product/program] improvements with measurable impact on [speed/cost/reliability/adoption].
+
+---
+
+## 14) Role-specific weighting
+
+### Hands-on EM
+Increase emphasis on:
+- architecture
+- technical decisions
+- modernization
+- code/design review influence
+- delivery and reliability metrics
+
+Decrease emphasis on:
+- generic people-management wording without technical substance
+
+### Balanced EM
+Keep strong representation of:
+- delivery
+- technical leadership
+- stakeholder alignment
+- coaching and team growth
+- business relevance
+
+### Manager-heavy EM
+Increase emphasis on:
+- org scope
+- multi-team coordination
+- manager or lead development
+- operating cadence and KPIs
+- executive communication
+- hiring and succession
+
+Decrease emphasis on:
+- low-level tool detail unless explicitly requested
+
+---
+
+## 15) Final quality check before output
+
+A bullet is ready only if all answers are “yes”:
+- Is it true?
+- Is it relevant to the JD?
+- Does it show ownership, not just participation?
+- Does it include scope or meaningful context?
+- Does it imply a useful outcome?
+- Can the candidate explain the details in an interview?
+- Does it sound like an EM, not an IC disguised as a manager?
+
+---
+
+## 16) Source basis for this knowledge file
+
+This file is grounded in current, high-credibility guidance and employer-side signals, including:
+- Workday guidance on how ATS systems parse and rank resumes
+- LinkedIn 2025 recruiting research on skills and quality of hire
+- SHRM skills-first hiring guidance
+- DORA software delivery performance metrics
+- SPACE framework research on measuring engineering outcomes beyond raw activity
+- current employer-side Engineering Manager job postings from Google and other employers showing the spectrum from hands-on EM to senior manager scope
+
+Use this file as a writing and ranking guide, not as permission to fabricate evidence.

@@ -5,10 +5,14 @@ $RunnerConfig = @{
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ DotLinkers SRE.md"
-    CompanyName = "DotLinkers"
-    JobTitle = "SRE"
-    OutputCvFileName = "Senior Software Engineer - YB.docx"
+    ##1
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Intetics Geo.md"
+    ##2
+    CompanyName = "Intetics"
+    ##3
+    JobTitle = "EngGeoTemp"
+    ##4
+    OutputCvFileName = "Intetics - Geo - Senior Software Engineer - YB.docx"
     TierName = "freetier"
     InputProfile = "role_engineer"
 
