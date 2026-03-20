@@ -78,14 +78,24 @@ def discover_stable_knowledge_files(
     return descriptors
 
 
+def _record_input_profile(record: dict[str, Any]) -> str | None:
+    value = record.get("input_profile")
+    if isinstance(value, str) and value:
+        return value
+    legacy_value = record.get("role_name")
+    if isinstance(legacy_value, str) and legacy_value:
+        return legacy_value
+    return None
+
+
 def compute_stable_knowledge_fingerprint(
     *,
-    role_name: str,
+    input_profile: str,
     model_name: str,
     knowledge_files: list[KnowledgeFileDescriptor],
 ) -> str:
     payload = {
-        "role_name": role_name,
+        "input_profile": input_profile,
         "model_name": model_name,
         "knowledge_files": [
             {"path": item.relative_path, "sha256": item.sha256}
@@ -161,14 +171,14 @@ def _find_run_cache_record(
     records: list[dict[str, Any]],
     *,
     run_id: str,
-    role_name: str,
+    input_profile: str,
     model_name: str,
 ) -> dict[str, Any] | None:
     for record in records:
         if (
             isinstance(record, dict)
             and record.get("run_id") == run_id
-            and record.get("role_name") == role_name
+            and _record_input_profile(record) == input_profile
             and record.get("model_name") == model_name
         ):
             return record
@@ -300,7 +310,7 @@ def _create_run_scoped_cached_content(
     *,
     client: Any,
     run_id: str,
-    role_name: str,
+    input_profile: str,
     model_name: str,
     ttl_seconds: int,
     stable_records: list[dict[str, Any]],
@@ -316,7 +326,7 @@ def _create_run_scoped_cached_content(
         )
         for record in all_records
     ]
-    display_name = f"{role_name}-{run_id}-run-cache"
+    display_name = f"{input_profile}-{run_id}-run-cache"
     return client.caches.create(
         model=model_name,
         config=types.CreateCachedContentConfig(
@@ -351,7 +361,7 @@ def _upsert_run_cache_record(
             continue
         if (
             record.get("run_id") == new_record.get("run_id")
-            and record.get("role_name") == new_record.get("role_name")
+            and _record_input_profile(record) == _record_input_profile(new_record)
             and record.get("model_name") == new_record.get("model_name")
         ):
             continue
@@ -363,7 +373,7 @@ def prepare_run_scoped_knowledge_cache(
     *,
     api_key: str,
     run_id: str,
-    role_name: str,
+    input_profile: str,
     model_name: str,
     prompt_templates: dict[str, PromptTemplate],
     job_description_path: Path,
@@ -376,15 +386,15 @@ def prepare_run_scoped_knowledge_cache(
 ) -> RunScopedKnowledgeCache:
     knowledge_files = discover_stable_knowledge_files(prompt_templates)
     stable_fingerprint = compute_stable_knowledge_fingerprint(
-        role_name=role_name,
+        input_profile=input_profile,
         model_name=model_name,
         knowledge_files=knowledge_files,
     )
     job_description_sha256 = _sha256_file(job_description_path)
     logger.info(
-        "Run cache preparation run_id=%s role_name=%s model_name=%s stable_knowledge_file_count=%s stable_fingerprint=%s invalidate_cache=%s force_reupload=%s",
+        "Run cache preparation run_id=%s input_profile=%s model_name=%s stable_knowledge_file_count=%s stable_fingerprint=%s invalidate_cache=%s force_reupload=%s",
         run_id,
-        role_name,
+        input_profile,
         model_name,
         len(knowledge_files),
         stable_fingerprint,
@@ -401,7 +411,7 @@ def prepare_run_scoped_knowledge_cache(
         existing_run_cache = _find_run_cache_record(
             run_cache_records,
             run_id=run_id,
-            role_name=role_name,
+            input_profile=input_profile,
             model_name=model_name,
         )
         if existing_run_cache is not None:
@@ -465,7 +475,7 @@ def prepare_run_scoped_knowledge_cache(
     remote_cache = _create_run_scoped_cached_content(
         client=client,
         run_id=run_id,
-        role_name=role_name,
+        input_profile=input_profile,
         model_name=model_name,
         ttl_seconds=ttl_seconds,
         stable_records=stable_records,
@@ -491,7 +501,7 @@ def prepare_run_scoped_knowledge_cache(
         run_cache_records,
         {
             "run_id": run_id,
-            "role_name": role_name,
+            "input_profile": input_profile,
             "model_name": model_name,
             "job_description_path": _normalize_path_for_registry(job_description_path),
             "job_description_sha256": job_description_sha256,

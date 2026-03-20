@@ -59,7 +59,7 @@ One role-wide cache may be slightly larger than some individual section requests
 
 ### High-level behavior
 
-When the app launches for a role such as `role_senior_dotnet_engineer`:
+When the app launches for a role such as `role_engineer`:
 
 1. Discover all active prompt templates for the role.
 2. Read all `knowledge_files` from non-`.example` prompt files.
@@ -101,7 +101,7 @@ The invalidate flag should be off by default.
 Create one small local registry file under `runs/_cache/`.
 
 Suggested stored fields:
-- `role_name`
+- `input_profile`
 - `model_name`
 - `fingerprint`
 - `knowledge_files`
@@ -144,7 +144,7 @@ Before triage:
 - collect all `knowledge_files` from active non-example prompts
 - deduplicate and sort them
 
-Expected current result for `role_senior_dotnet_engineer`:
+Expected current result for `role_engineer`:
 - 8 unique files
 
 ### Step 2: Resolve reuse vs rebuild
@@ -155,7 +155,7 @@ If `--invalidate-cache` is passed:
 
 Otherwise:
 - load registry
-- look for matching `role_name`, `model_name`, and `fingerprint`
+- look for matching `input_profile`, `model_name`, and `fingerprint`
 - if present, confirm through Gemini API that:
   - cache exists
   - cache is not expired
@@ -345,3 +345,4 @@ This is the best balance of:
 - future extensibility
 
 Do not add JD caching or per-section caches in the same implementation. Those are separate optimizations and would make the first version harder to validate.
+

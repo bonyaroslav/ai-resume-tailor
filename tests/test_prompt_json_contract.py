@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from prompt_loader import discover_prompt_templates
-from settings import DEFAULT_ROLE_NAME, role_knowledge_dir, role_prompts_dir
+from settings import (
+    DEFAULT_INPUT_PROFILE,
+    input_profile_knowledge_dir,
+    input_profile_prompts_dir,
+)
 
 DEFAULT_REQUIRED_JSON_SCHEMA_KEYS: tuple[str, ...] = (
     '"variations"',
@@ -67,8 +71,8 @@ AUDIT_REQUIRED_MARKDOWN_HEADINGS: tuple[str, ...] = (
 
 def test_active_prompts_keep_universal_json_envelope_contract() -> None:
     templates = discover_prompt_templates(
-        role_prompts_dir(DEFAULT_ROLE_NAME),
-        role_knowledge_dir(DEFAULT_ROLE_NAME),
+        input_profile_prompts_dir(DEFAULT_INPUT_PROFILE),
+        input_profile_knowledge_dir(DEFAULT_INPUT_PROFILE),
     )
 
     for section_id, template in templates.items():

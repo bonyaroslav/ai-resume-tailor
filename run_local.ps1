@@ -34,8 +34,8 @@ $companyName = [string]$RunnerConfig.CompanyName
 $jobTitle = [string]$RunnerConfig.JobTitle
 $outputCvFileName = [string]$RunnerConfig.OutputCvFileName
 $tierName = [string]$RunnerConfig.TierName
-$roleName = [string]$RunnerConfig.RoleName
-$defaultRoleName = "role_senior_dotnet_engineer"
+$inputProfile = [string]$RunnerConfig.InputProfile
+$defaultInputProfile = "role_engineer"
 $manualModelName = [string]$RunnerConfig.ModelName
 $templatePath = [string]$RunnerConfig.TemplatePath
 $debugMode = [bool]$RunnerConfig.Debug
@@ -85,9 +85,9 @@ if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
 if ([string]::IsNullOrWhiteSpace($tierName)) {
     throw "TierName must not be empty in runner.config.ps1"
 }
-if ([string]::IsNullOrWhiteSpace($roleName)) {
-    Write-Host "RoleName is empty in runner.config.ps1; defaulting to $defaultRoleName"
-    $roleName = $defaultRoleName
+if ([string]::IsNullOrWhiteSpace($inputProfile)) {
+    Write-Host "InputProfile is empty in runner.config.ps1; defaulting to $defaultInputProfile"
+    $inputProfile = $defaultInputProfile
 }
 if (-not $tierProfiles) {
     throw "TierProfiles must be defined in runner.config.ps1"
@@ -149,7 +149,7 @@ if (-not [string]::IsNullOrWhiteSpace($knowledgeCacheRegistryPath)) {
 
 Write-Host "      TierName=$tierName"
 Write-Host "      ModelName=$modelName"
-Write-Host "      RoleName=$roleName"
+Write-Host "      InputProfile=$inputProfile"
 if (-not [string]::IsNullOrWhiteSpace($env:ART_OUTPUT_CV_FILENAME)) {
     Write-Host "      ART_OUTPUT_CV_FILENAME=$env:ART_OUTPUT_CV_FILENAME"
 }
@@ -176,7 +176,7 @@ else {
 }
 
 Write-Host "[5/5] Running AI Resume Tailor"
-$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName, "--role", $roleName)
+$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName, "--input-profile", $inputProfile)
 if (-not [string]::IsNullOrWhiteSpace($jobTitle)) {
     $runArgs += @("--job-title", $jobTitle)
 }

@@ -10,7 +10,7 @@ $RunnerConfig = @{
     JobTitle = "SRE"
     OutputCvFileName = "Senior Software Engineer - YB.docx"
     TierName = "freetier"
-    RoleName = "role_senior_dotnet_engineer"
+    InputProfile = "role_engineer"
 
     # Manual override for the selected tier model.
     # Leave empty to use TierProfiles.<TierName>.ModelName.

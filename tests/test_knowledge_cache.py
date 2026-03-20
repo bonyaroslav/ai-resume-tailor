@@ -62,13 +62,13 @@ def test_cache_fingerprint_changes_when_knowledge_content_changes() -> None:
     }
 
     first = compute_stable_knowledge_fingerprint(
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         knowledge_files=discover_stable_knowledge_files(templates),
     )
     knowledge_file.write_text("second", encoding="utf-8")
     second = compute_stable_knowledge_fingerprint(
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         knowledge_files=discover_stable_knowledge_files(templates),
     )
@@ -96,12 +96,12 @@ def test_cache_fingerprint_does_not_change_when_prompt_body_changes_only() -> No
     }
 
     first = compute_stable_knowledge_fingerprint(
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         knowledge_files=discover_stable_knowledge_files(first_templates),
     )
     second = compute_stable_knowledge_fingerprint(
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         knowledge_files=discover_stable_knowledge_files(second_templates),
     )
@@ -198,7 +198,7 @@ def test_prepare_run_scoped_knowledge_cache_reuses_existing_remote_file() -> Non
     cache = prepare_run_scoped_knowledge_cache(
         api_key="test-key",
         run_id="run-1",
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
         job_description_path=job_description_path,
@@ -251,7 +251,7 @@ def test_prepare_run_scoped_knowledge_cache_force_reupload_uploads_again() -> No
     prepare_run_scoped_knowledge_cache(
         api_key="test-key",
         run_id="run-1",
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
         job_description_path=job_description_path,
@@ -290,7 +290,7 @@ def test_prepare_run_scoped_knowledge_cache_reuses_existing_run_cache_when_jd_ma
     stable_remote = client.files.upload(file=str(knowledge_file))
     discovered = discover_stable_knowledge_files(templates)
     stable_fingerprint = compute_stable_knowledge_fingerprint(
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         knowledge_files=discovered,
     )
@@ -312,7 +312,7 @@ def test_prepare_run_scoped_knowledge_cache_reuses_existing_run_cache_when_jd_ma
   "run_caches": [
     {{
       "run_id": "run-1",
-      "role_name": "role_a",
+      "input_profile": "role_a",
       "model_name": "gemini-test",
       "job_description_sha256": "{job_description_sha256}",
       "stable_fingerprint": "{stable_fingerprint}",
@@ -328,7 +328,7 @@ def test_prepare_run_scoped_knowledge_cache_reuses_existing_run_cache_when_jd_ma
     cache = prepare_run_scoped_knowledge_cache(
         api_key="test-key",
         run_id="run-1",
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
         job_description_path=job_description_path,
@@ -381,7 +381,7 @@ def test_prepare_run_scoped_knowledge_cache_recreates_run_cache_when_jd_changes(
   "run_caches": [
     {{
       "run_id": "run-1",
-      "role_name": "role_a",
+      "input_profile": "role_a",
       "model_name": "gemini-test",
       "job_description_sha256": "stale-hash",
       "stable_fingerprint": "stale-fingerprint",
@@ -397,7 +397,7 @@ def test_prepare_run_scoped_knowledge_cache_recreates_run_cache_when_jd_changes(
     cache = prepare_run_scoped_knowledge_cache(
         api_key="test-key",
         run_id="run-1",
-        role_name="role_a",
+        input_profile="role_a",
         model_name="gemini-test",
         prompt_templates=templates,
         job_description_path=job_description_path,

@@ -59,7 +59,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         job_description="Example JD",
         api_key="test-key",
         model_name="fake-model",
-        role_name="role_senior_dotnet_engineer",
+        input_profile="role_engineer",
         prompt_templates=_build_prompt_templates(run_dir),
         debug_mode=False,
         auto_approve_review=False,
@@ -563,7 +563,7 @@ def test_run_graph_prepares_role_wide_knowledge_cache_before_generation(
         prepared_cache_calls.append(
             {
                 "run_id": str(kwargs["run_id"]),
-                "role_name": str(kwargs["role_name"]),
+                "input_profile": str(kwargs["input_profile"]),
                 "model_name": str(kwargs["model_name"]),
             }
         )
@@ -606,7 +606,7 @@ def test_run_graph_prepares_role_wide_knowledge_cache_before_generation(
     assert prepared_cache_calls == [
         {
             "run_id": "integration-run-5",
-            "role_name": "role_senior_dotnet_engineer",
+            "input_profile": "role_engineer",
             "model_name": "fake-model",
         }
     ]

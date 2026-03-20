@@ -31,14 +31,14 @@ from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
 from settings import (
-    DEFAULT_ROLE_NAME,
-    ROLE_NAME_ENV,
-    default_template_path_for_role,
-    role_knowledge_dir,
-    role_prompts_dir,
+    DEFAULT_INPUT_PROFILE,
+    INPUT_PROFILE_ENV,
+    default_template_path_for_input_profile,
+    input_profile_knowledge_dir,
+    input_profile_prompts_dir,
     resolve_gemini_model_name,
+    resolve_input_profile,
     resolve_output_cv_filename,
-    resolve_role_name,
 )
 from workflow_definition import (
     GENERATION_SECTION_IDS,
@@ -49,7 +49,9 @@ from workflow_definition import (
 LEGACY_DEFAULT_TEMPLATE_PATH = Path(
     "knowledge/Template - YB Senior Software Engineer.docx"
 )
-DEFAULT_TEMPLATE_PATH = str(default_template_path_for_role(DEFAULT_ROLE_NAME))
+DEFAULT_TEMPLATE_PATH = str(
+    default_template_path_for_input_profile(DEFAULT_INPUT_PROFILE)
+)
 AUTO_APPROVE_REVIEW_ENV = "ART_AUTO_APPROVE_REVIEW"
 TRIAGE_DECISION_MODE_ENV = "ART_TRIAGE_DECISION_MODE"
 OFFLINE_MODE_ENV = "ART_OFFLINE_MODE"
@@ -73,7 +75,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--job-title", default=None)
     run_parser.add_argument("--template-path", type=Path, default=None)
     run_parser.add_argument("--model", default=None)
-    run_parser.add_argument("--role", default=None)
+    run_parser.add_argument(
+        "--input-profile", "--role", dest="input_profile", default=None
+    )
     run_parser.add_argument("--debug", action="store_true")
     run_parser.add_argument("--invalidate-cache", action="store_true")
     run_parser.add_argument("--force-knowledge-reupload", action="store_true")
@@ -84,7 +88,9 @@ def _build_parser() -> argparse.ArgumentParser:
     resume_group.add_argument("--run-path", type=Path)
     resume_group.add_argument("--checkpoint-path", type=Path)
     resume_parser.add_argument("--model", default=None)
-    resume_parser.add_argument("--role", default=None)
+    resume_parser.add_argument(
+        "--input-profile", "--role", dest="input_profile", default=None
+    )
     resume_parser.add_argument("--invalidate-cache", action="store_true")
     resume_parser.add_argument("--force-knowledge-reupload", action="store_true")
     resume_parser.add_argument("--skills-category-count", type=int, default=None)
@@ -105,7 +111,9 @@ def _build_parser() -> argparse.ArgumentParser:
     regenerate_parser.add_argument("--sections", required=True)
     regenerate_parser.add_argument("--note", required=True)
     regenerate_parser.add_argument("--model", default=None)
-    regenerate_parser.add_argument("--role", default=None)
+    regenerate_parser.add_argument(
+        "--input-profile", "--role", dest="input_profile", default=None
+    )
     regenerate_parser.add_argument("--invalidate-cache", action="store_true")
     regenerate_parser.add_argument("--force-knowledge-reupload", action="store_true")
     regenerate_parser.add_argument("--skills-category-count", type=int, default=None)
@@ -116,7 +124,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rebuild_group = rebuild_parser.add_mutually_exclusive_group(required=True)
     rebuild_group.add_argument("--run-path", type=Path)
     rebuild_group.add_argument("--checkpoint-path", type=Path)
-    rebuild_parser.add_argument("--role", default=None)
+    rebuild_parser.add_argument(
+        "--input-profile", "--role", dest="input_profile", default=None
+    )
 
     return parser
 
@@ -350,44 +360,57 @@ def _load_metadata_or_default(
     return metadata
 
 
-def _resolve_role_name_for_command(
-    explicit_role: str | None,
+def _metadata_input_profile(metadata: dict[str, str]) -> str | None:
+    input_profile = metadata.get("input_profile")
+    if input_profile:
+        return input_profile
+    legacy_input_profile = metadata.get("role_name")
+    if legacy_input_profile:
+        return legacy_input_profile
+    return None
+
+
+def _resolve_input_profile_for_command(
+    explicit_input_profile: str | None,
     *,
-    metadata_role: str | None,
+    metadata_input_profile: str | None,
 ) -> str:
     if (
-        explicit_role
-        and metadata_role
-        and explicit_role.strip()
-        and explicit_role.strip() != metadata_role.strip()
+        explicit_input_profile
+        and metadata_input_profile
+        and explicit_input_profile.strip()
+        and explicit_input_profile.strip() != metadata_input_profile.strip()
     ):
         raise SystemExit(
-            "Role mismatch for this run. "
-            f"Saved role is '{metadata_role.strip()}', "
-            f"but '--role {explicit_role.strip()}' was requested."
+            "Input profile mismatch for this run. "
+            f"Saved input profile is '{metadata_input_profile.strip()}', "
+            f"but '--input-profile {explicit_input_profile.strip()}' was requested."
         )
-    return resolve_role_name(explicit_role, metadata_role=metadata_role)
+    return resolve_input_profile(
+        explicit_input_profile,
+        metadata_input_profile=metadata_input_profile,
+    )
 
 
 def _resolve_template_path(
     explicit_template: Path | None,
     *,
     metadata_template: str | None,
-    role_name: str,
+    input_profile: str,
 ) -> Path:
     if explicit_template is not None:
         return explicit_template
     if metadata_template:
         candidate = Path(metadata_template)
-        role_default = default_template_path_for_role(role_name)
+        profile_default = default_template_path_for_input_profile(input_profile)
         if (
             candidate == LEGACY_DEFAULT_TEMPLATE_PATH
             and not candidate.exists()
-            and role_default.exists()
+            and profile_default.exists()
         ):
-            return role_default
+            return profile_default
         return candidate
-    return default_template_path_for_role(role_name)
+    return default_template_path_for_input_profile(input_profile)
 
 
 def _resolve_run_checkpoint_pair(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -565,7 +588,7 @@ async def _ensure_role_wide_knowledge_cache(
         prepare_run_scoped_knowledge_cache,
         api_key=context.api_key,
         run_id=state.run_id,
-        role_name=context.role_name,
+        input_profile=context.input_profile,
         model_name=context.model_name,
         prompt_templates=context.prompt_templates,
         job_description_path=context.job_description_path,
@@ -715,13 +738,13 @@ def _prepare_runtime_context(
     job_description: str,
     template_path: Path,
     model_name: str,
-    role_name: str,
+    input_profile: str,
     output_cv_filename: str,
     debug_mode: bool,
     skills_category_count: int,
 ) -> RuntimeContext:
-    prompts_dir = role_prompts_dir(role_name)
-    knowledge_dir = role_knowledge_dir(role_name)
+    prompts_dir = input_profile_prompts_dir(input_profile)
+    knowledge_dir = input_profile_knowledge_dir(input_profile)
     prompt_templates = discover_prompt_templates(prompts_dir, knowledge_dir)
     preflight_template(template_path, TEMPLATE_SECTION_IDS)
 
@@ -738,7 +761,7 @@ def _prepare_runtime_context(
         job_description=job_description,
         api_key=_load_api_key(),
         model_name=model_name,
-        role_name=role_name,
+        input_profile=input_profile,
         prompt_templates=prompt_templates,
         debug_mode=debug_mode,
         auto_approve_review=_truthy_env_with_default(
@@ -825,11 +848,11 @@ async def _handle_run(args: argparse.Namespace) -> None:
         return
 
     metadata = _load_metadata_or_default(run_dir, args)
-    role_name = _resolve_role_name_for_command(
-        args.role,
-        metadata_role=metadata.get("role_name"),
+    input_profile = _resolve_input_profile_for_command(
+        getattr(args, "input_profile", None),
+        metadata_input_profile=_metadata_input_profile(metadata),
     )
-    os.environ[ROLE_NAME_ENV] = role_name
+    os.environ[INPUT_PROFILE_ENV] = input_profile
     jd_path, jd_text = _persist_run_job_description(run_dir, args.jd_path)
 
     model_name = resolve_gemini_model_name(
@@ -842,7 +865,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
     template_path = _resolve_template_path(
         args.template_path,
         metadata_template=metadata.get("template_path"),
-        role_name=role_name,
+        input_profile=input_profile,
     )
     debug_mode = metadata.get("debug_mode", "false") == "true"
     if args.debug:
@@ -859,7 +882,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
         job_description=jd_text,
         template_path=template_path,
         model_name=model_name,
-        role_name=role_name,
+        input_profile=input_profile,
         output_cv_filename=output_cv_filename,
         debug_mode=debug_mode,
         skills_category_count=skills_category_count,
@@ -879,7 +902,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
             or "",
             "template_path": str(template_path),
             "model_name": model_name,
-            "role_name": role_name,
+            "input_profile": input_profile,
             "output_cv_filename": output_cv_filename,
             "debug_mode": str(debug_mode).lower(),
             "skills_category_count": str(skills_category_count),
@@ -887,7 +910,7 @@ async def _handle_run(args: argparse.Namespace) -> None:
     )
     print(f"Using run folder: {run_dir}")
     print(f"Model: {model_name}")
-    print(f"Role: {role_name}")
+    print(f"Input profile: {input_profile}")
     print(f"JD preview: {_job_description_preview(jd_text, max_lines=3)}")
     final_state = await _run_graph(state, context)
     _print_status_summary(final_state, run_dir)
@@ -899,11 +922,11 @@ async def _handle_resume(args: argparse.Namespace) -> None:
 
     state = load_checkpoint(checkpoint_path)
     metadata = load_run_metadata(run_dir)
-    role_name = _resolve_role_name_for_command(
-        args.role,
-        metadata_role=metadata.get("role_name"),
+    input_profile = _resolve_input_profile_for_command(
+        getattr(args, "input_profile", None),
+        metadata_input_profile=_metadata_input_profile(metadata),
     )
-    os.environ[ROLE_NAME_ENV] = role_name
+    os.environ[INPUT_PROFILE_ENV] = input_profile
     jd_path, jd_text = _load_existing_run_job_description(run_dir)
     _print_status_summary(state, run_dir)
     _print_next_steps(state, run_dir)
@@ -923,10 +946,10 @@ async def _handle_resume(args: argparse.Namespace) -> None:
         template_path=_resolve_template_path(
             explicit_template=None,
             metadata_template=metadata.get("template_path"),
-            role_name=role_name,
+            input_profile=input_profile,
         ),
         model_name=model_name,
-        role_name=role_name,
+        input_profile=input_profile,
         output_cv_filename=output_cv_filename,
         debug_mode=metadata.get("debug_mode", "false") == "true",
         skills_category_count=_resolve_skills_category_count(
@@ -959,11 +982,11 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     metadata = load_run_metadata(run_dir)
-    role_name = _resolve_role_name_for_command(
-        args.role,
-        metadata_role=metadata.get("role_name"),
+    input_profile = _resolve_input_profile_for_command(
+        getattr(args, "input_profile", None),
+        metadata_input_profile=_metadata_input_profile(metadata),
     )
-    os.environ[ROLE_NAME_ENV] = role_name
+    os.environ[INPUT_PROFILE_ENV] = input_profile
     jd_path, jd_text = _load_existing_run_job_description(run_dir)
     try:
         sections = _parse_requested_sections(args.sections)
@@ -991,10 +1014,10 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         template_path=_resolve_template_path(
             explicit_template=None,
             metadata_template=metadata.get("template_path"),
-            role_name=role_name,
+            input_profile=input_profile,
         ),
         model_name=model_name,
-        role_name=role_name,
+        input_profile=input_profile,
         output_cv_filename=output_cv_filename,
         debug_mode=metadata.get("debug_mode", "false") == "true",
         skills_category_count=_resolve_skills_category_count(
@@ -1024,11 +1047,11 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
     save_checkpoint(checkpoint_path, state)
 
     metadata = load_run_metadata(run_dir)
-    role_name = _resolve_role_name_for_command(
-        args.role,
-        metadata_role=metadata.get("role_name"),
+    input_profile = _resolve_input_profile_for_command(
+        getattr(args, "input_profile", None),
+        metadata_input_profile=_metadata_input_profile(metadata),
     )
-    os.environ[ROLE_NAME_ENV] = role_name
+    os.environ[INPUT_PROFILE_ENV] = input_profile
     jd_path, jd_text = _load_existing_run_job_description(run_dir)
     context = _prepare_runtime_context(
         run_dir=run_dir,
@@ -1038,13 +1061,13 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
         template_path=_resolve_template_path(
             explicit_template=None,
             metadata_template=metadata.get("template_path"),
-            role_name=role_name,
+            input_profile=input_profile,
         ),
         model_name=resolve_gemini_model_name(
             explicit_model=None,
             metadata_model=metadata.get("model_name"),
         ),
-        role_name=role_name,
+        input_profile=input_profile,
         output_cv_filename=resolve_output_cv_filename(
             metadata_filename=metadata.get("output_cv_filename")
         ),

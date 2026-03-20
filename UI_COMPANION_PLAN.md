@@ -17,8 +17,8 @@ Build a very basic, local UI with clean minimalist styling that:
 - Logs are written to `runs/<slug>/run.log`.
 - Workflow states and section ids are stable and explicit (`graph_state.py`, `workflow_definition.py`).
 - Roles are folder-based:
-  - `prompts/role_senior_dotnet_engineer` (has active prompts)
-  - `prompts/role_engineering_manager` (currently placeholder only)
+  - `prompts/role_engineer` (has active prompts)
+  - `prompts/role_manager` (currently placeholder only)
 - Model pricing/help source already exists in `ai_model_decision_sheet.md`.
 
 Implication: we can build UI around existing files + commands without changing critical core flow.
@@ -93,7 +93,7 @@ This avoids stdin/pty complexity and avoids invasive core refactors.
   - load selected run.
 - Settings:
   - model dropdown.
-  - role dropdown (`role_senior_dotnet_engineer`, `role_engineering_manager`, etc.).
+  - role dropdown (`role_engineer`, `role_manager`, etc.).
   - company name input.
   - debug toggle.
 - Actions:
@@ -238,7 +238,7 @@ Suggested endpoints/services:
    - Mitigation: add per-run mutex (`run_id` lock) + `run_busy` flag, disable action buttons while busy.
 
 3. Role readiness must be preflight-blocked.
-   - `role_engineering_manager` currently has no active prompt set.
+   - `role_manager` currently has no active prompt set.
    - Risk: user starts run and fails late.
    - Mitigation: preflight checks before start/resume:
      - all required prompt files exist
@@ -369,3 +369,5 @@ Suggested endpoints/services:
 - User can view colorful logs.
 - User can trigger next actions with buttons.
 - Model help modal shows prices/interval notes from your MD sheet.
+
+

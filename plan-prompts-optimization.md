@@ -252,7 +252,7 @@ These records are reusable across runs.
 
 Suggested fields:
 - `run_id`
-- `role_name`
+- `input_profile`
 - `model_name`
 - `job_description_path`
 - `job_description_sha256`
@@ -548,3 +548,4 @@ Start implementation with the smallest contract changes first:
 3. then refactor cache handling
 
 This ordering keeps failures easier to isolate and makes it possible to verify prompt changes before touching cache recreation logic.
+

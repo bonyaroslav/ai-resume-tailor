@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from settings import default_offline_fixtures_path_for_role, resolve_role_name
+from settings import (
+    default_offline_fixtures_path_for_input_profile,
+    resolve_input_profile,
+)
 from section_ids import is_experience_section
 from workflow_definition import AUDIT_SECTION_ID, TRIAGE_SECTION_ID
 
@@ -114,8 +117,8 @@ def _load_offline_fixtures() -> dict[str, Any]:
 
 
 def _default_offline_fixtures_path() -> Path:
-    role_name = resolve_role_name(explicit_role=None)
-    return default_offline_fixtures_path_for_role(role_name)
+    input_profile = resolve_input_profile(explicit_input_profile=None)
+    return default_offline_fixtures_path_for_input_profile(input_profile)
 
 
 def _generate_offline(section_id: str | None) -> LlmGenerationResult:

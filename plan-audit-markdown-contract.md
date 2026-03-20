@@ -14,7 +14,7 @@ Convert the `audit_cv_deep_dive` step from JSON-envelope output to direct Markdo
 
 ## File Touchpoints
 
-- `prompts/role_senior_dotnet_engineer/audit_cv_deep_dive.md`
+- `prompts/role_engineer/audit_cv_deep_dive.md`
 - `llm_client.py`
 - `graph_nodes.py`
 - `tests/test_prompt_json_contract.py`
@@ -67,3 +67,4 @@ Convert the `audit_cv_deep_dive` step from JSON-envelope output to direct Markdo
 3. Audit node accepts Markdown, validates it lightly, and writes it to `cv_deep_dive_audit.md`.
 4. Existing non-audit sections continue to use their current JSON flows.
 5. Formatter, linter, and test suite pass after the change.
+

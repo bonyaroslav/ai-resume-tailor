@@ -114,11 +114,11 @@ Support multiple target roles by selecting role-specific `prompts/` and `knowled
 ## Decisions Locked
 
 1. Existing assets move to:
-   - `prompts/role_senior_dotnet_engineer/`
-   - `knowledge/role_senior_dotnet_engineer/`
+   - `prompts/role_engineer/`
+   - `knowledge/role_engineer/`
 2. New empty role folders are added:
-   - `prompts/role_engineering_manager/`
-   - `knowledge/role_engineering_manager/`
+   - `prompts/role_manager/`
+   - `knowledge/role_manager/`
 3. Role resolution priority mirrors model resolution:
    - explicit CLI arg -> run metadata -> env var -> default role
 4. Role mismatch on existing runs should fail fast (no silent cross-role resume/regenerate).
@@ -126,17 +126,17 @@ Support multiple target roles by selecting role-specific `prompts/` and `knowled
 ## Step-by-Step Implementation
 
 1. Move files and create folders
-   - Move all files currently in top-level `prompts/` and `knowledge/` into `role_senior_dotnet_engineer` subfolders.
-   - Create empty `role_engineering_manager` folders under both roots.
+   - Move all files currently in top-level `prompts/` and `knowledge/` into `role_engineer` subfolders.
+   - Create empty `role_manager` folders under both roots.
 
 2. Add role config in `settings.py`
-   - Add env constant (`ART_ROLE`) and default role constant.
+   - Add env constant (`ART_INPUT_PROFILE`) and default role constant.
    - Add helper(s) to resolve role name and role-specific prompts/knowledge/template/offline-fixture paths.
 
 3. Wire role into CLI/runtime (`main.py`)
-   - Add `--role` argument.
+   - Add `--input-profile` argument.
    - Resolve role using the same precedence style as model config.
-   - Persist `role_name` in run metadata.
+   - Persist `input_profile` in run metadata.
    - Build runtime prompt/knowledge paths from resolved role.
 
 4. Keep offline mode working (`llm_client.py`)
@@ -157,7 +157,8 @@ Support multiple target roles by selecting role-specific `prompts/` and `knowled
 ## Acceptance Criteria
 
 1. App loads prompts/knowledge from role subfolders selected at run start.
-2. Existing runs retain and reuse saved `role_name` safely.
+2. Existing runs retain and reuse saved `input_profile` safely.
 3. Offline mode works without manual fixture-path override.
 4. Empty new role folders are present and selectable.
 5. Formatter, linter, and tests pass.
+

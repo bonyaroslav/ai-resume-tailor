@@ -97,7 +97,7 @@ class RuntimeContext:
     job_description: str
     api_key: str
     model_name: str
-    role_name: str
+    input_profile: str
     prompt_templates: dict[str, PromptTemplate]
     debug_mode: bool
     auto_approve_review: bool

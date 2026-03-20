@@ -7,8 +7,9 @@ GEMINI_MODEL_ENV = "GEMINI_MODEL"
 DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 OUTPUT_CV_FILENAME_ENV = "ART_OUTPUT_CV_FILENAME"
 DEFAULT_OUTPUT_CV_FILENAME = "tailored_cv.docx"
-ROLE_NAME_ENV = "ART_ROLE"
-DEFAULT_ROLE_NAME = "role_senior_dotnet_engineer"
+INPUT_PROFILE_ENV = "ART_INPUT_PROFILE"
+LEGACY_ROLE_NAME_ENV = "ART_ROLE"
+DEFAULT_INPUT_PROFILE = "role_engineer"
 DEFAULT_TEMPLATE_FILENAME = "Template - YB Senior Software Engineer.docx"
 DEFAULT_OFFLINE_FIXTURES_FILENAME = "offline_responses.example.json"
 
@@ -25,17 +26,22 @@ def resolve_gemini_model_name(
     return os.getenv(GEMINI_MODEL_ENV, DEFAULT_GEMINI_MODEL)
 
 
-def resolve_role_name(
-    explicit_role: str | None,
+def resolve_input_profile(
+    explicit_input_profile: str | None,
     *,
-    metadata_role: str | None = None,
+    metadata_input_profile: str | None = None,
 ) -> str:
-    if explicit_role and explicit_role.strip():
-        return explicit_role.strip()
-    if metadata_role and metadata_role.strip():
-        return metadata_role.strip()
-    configured = os.getenv(ROLE_NAME_ENV, DEFAULT_ROLE_NAME).strip()
-    return configured or DEFAULT_ROLE_NAME
+    if explicit_input_profile and explicit_input_profile.strip():
+        return explicit_input_profile.strip()
+    if metadata_input_profile and metadata_input_profile.strip():
+        return metadata_input_profile.strip()
+    configured = os.getenv(INPUT_PROFILE_ENV, "").strip()
+    if configured:
+        return configured
+    legacy_configured = os.getenv(LEGACY_ROLE_NAME_ENV, "").strip()
+    if legacy_configured:
+        return legacy_configured
+    return DEFAULT_INPUT_PROFILE
 
 
 def _normalize_output_cv_filename(value: str | None) -> str | None:
@@ -82,21 +88,24 @@ def resolve_output_cv_filename(
     return DEFAULT_OUTPUT_CV_FILENAME
 
 
-def role_prompts_dir(role_name: str) -> Path:
-    return Path("prompts") / role_name
+def input_profile_prompts_dir(input_profile: str) -> Path:
+    return Path("prompts") / input_profile
 
 
-def role_knowledge_dir(role_name: str) -> Path:
-    return Path("knowledge") / role_name
+def input_profile_knowledge_dir(input_profile: str) -> Path:
+    return Path("knowledge") / input_profile
 
 
-def role_offline_fixtures_dir(role_name: str) -> Path:
-    return Path("offline_fixtures") / role_name
+def input_profile_offline_fixtures_dir(input_profile: str) -> Path:
+    return Path("offline_fixtures") / input_profile
 
 
-def default_template_path_for_role(role_name: str) -> Path:
-    return role_knowledge_dir(role_name) / DEFAULT_TEMPLATE_FILENAME
+def default_template_path_for_input_profile(input_profile: str) -> Path:
+    return input_profile_knowledge_dir(input_profile) / DEFAULT_TEMPLATE_FILENAME
 
 
-def default_offline_fixtures_path_for_role(role_name: str) -> Path:
-    return role_offline_fixtures_dir(role_name) / DEFAULT_OFFLINE_FIXTURES_FILENAME
+def default_offline_fixtures_path_for_input_profile(input_profile: str) -> Path:
+    return (
+        input_profile_offline_fixtures_dir(input_profile)
+        / DEFAULT_OFFLINE_FIXTURES_FILENAME
+    )
