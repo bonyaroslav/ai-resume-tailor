@@ -5,17 +5,17 @@ $RunnerConfig = @{
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
-    ##1
+    ##1 UPDATE before run
     JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Beetroot Integration Engineer Azure.md"
-    ##2
+    ##2 UPDATE before run
     CompanyName = "Beetroot"
-    ##3
+    ##3 UPDATE before run
     JobTitle = "Integration Engineer Azure."
-    ##4
+    ##4 UPDATE before run
     OutputCvFileName = "Beetroot - Senior Software Engineer - YB.docx"
-    ##5
+    ##5 UPDATE before run
     TierName = "freetier"
-    ##6
+    ##6 UPDATE before run
     InputProfile = "role_engineer"
 
     # Manual override for the selected tier model.

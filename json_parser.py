@@ -283,21 +283,21 @@ def _normalize_skills_envelope_with_categories(
                 f"{category_count} items (variation={variation_index})."
             )
 
-        category_lines = ["Skills"]
+        category_lines: list[str] = []
         for category_index, category in enumerate(categories, start=1):
             category_name, category_text = _validate_skill_category(
                 category,
                 variation_index=variation_index,
                 category_index=category_index,
             )
-            category_lines.append(f"- {category_name}: {category_text}")
+            category_lines.append(f"**{category_name}:** {category_text}")
 
         normalized_variations.append(
             {
                 "id": variation_id.strip(),
                 "score_0_to_100": score,
                 "ai_reasoning": ai_reasoning,
-                "content_for_template": "\n".join(category_lines),
+                "content_for_template": "\n\n".join(category_lines),
             }
         )
 
