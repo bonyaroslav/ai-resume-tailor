@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -10,6 +11,9 @@ from section_ids import canonical_section_id_from_prompt_path
 from workflow_definition import WORKFLOW_SECTION_IDS
 
 ALLOWED_FRONTMATTER_KEYS = {"knowledge_files"}
+KNOWLEDGE_FILE_SLOT_PATTERN = re.compile(
+    r"^(?P<prefix>.+?_\d+)(?:_.+)?(?P<suffix>\.[^.]+)$"
+)
 
 
 class PromptValidationError(ValueError):
@@ -77,10 +81,33 @@ def _validate_frontmatter_and_resolve_context(
         candidate = (knowledge_dir / filename).resolve()
         if candidate.parent != knowledge_dir.resolve():
             raise PromptValidationError(f"Invalid knowledge file path: {filename}")
-        if not candidate.exists():
-            raise PromptValidationError(f"Missing knowledge file: {filename}")
-        resolved_paths.append(candidate)
+        resolved_paths.append(
+            _resolve_knowledge_file(candidate, knowledge_dir, filename)
+        )
     return resolved_paths
+
+
+def _resolve_knowledge_file(
+    candidate: Path, knowledge_dir: Path, filename: str
+) -> Path:
+    if candidate.exists():
+        return candidate
+
+    fallback_match = KNOWLEDGE_FILE_SLOT_PATTERN.match(filename)
+    if fallback_match is None:
+        raise PromptValidationError(f"Missing knowledge file: {filename}")
+
+    prefix = fallback_match.group("prefix")
+    suffix = fallback_match.group("suffix")
+    matches = sorted(knowledge_dir.glob(f"{prefix}_*{suffix}"))
+    if not matches:
+        raise PromptValidationError(f"Missing knowledge file: {filename}")
+    if len(matches) > 1:
+        matching_names = ", ".join(path.name for path in matches)
+        raise PromptValidationError(
+            f"Ambiguous knowledge file match for {filename}: {matching_names}"
+        )
+    return matches[0].resolve()
 
 
 def discover_prompt_templates(

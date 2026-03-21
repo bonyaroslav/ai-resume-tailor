@@ -315,7 +315,7 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     output_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
     assert "Approved content for section_professional_summary" in output_text
     assert (
-        "Skills: **Languages, core stack:** Python, SQL\n\n**Cloud, infra:** AWS\n\n**Testing, quality:** pytest\n\n**Delivery, tooling:** Docker"
+        "Skills: Languages, core stack: Python, SQL\n\nCloud, infra: AWS\n\nTesting, quality: pytest\n\nDelivery, tooling: Docker"
         in output_text
     )
     assert "Approved content for section_experience_1" in output_text

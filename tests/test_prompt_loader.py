@@ -90,6 +90,53 @@ Skills prompt body
         discover_prompt_templates(prompts_dir, knowledge_dir)
 
 
+def test_discover_prompt_templates_resolves_knowledge_file_by_prefix() -> None:
+    tmp_path = make_workspace_temp_dir("prompt-loader-prefix-match")
+    prompts_dir = tmp_path / "prompts"
+    knowledge_dir = tmp_path / "knowledge"
+    _write_minimal_prompt_set(prompts_dir)
+    _write(knowledge_dir / "accomplishments_work_3_manager_argusmedia.md", "argus")
+    _write(
+        prompts_dir / "section_experience_3_latest.md",
+        """---
+knowledge_files:
+  - "accomplishments_work_3_argusmedia.md"
+---
+Exp3 prompt body
+""",
+    )
+
+    templates = discover_prompt_templates(prompts_dir, knowledge_dir)
+
+    assert (
+        templates["section_experience_3"].knowledge_files[0].name
+        == "accomplishments_work_3_manager_argusmedia.md"
+    )
+
+
+def test_discover_prompt_templates_fails_on_ambiguous_prefix_match() -> None:
+    tmp_path = make_workspace_temp_dir("prompt-loader-prefix-ambiguous")
+    prompts_dir = tmp_path / "prompts"
+    knowledge_dir = tmp_path / "knowledge"
+    _write_minimal_prompt_set(prompts_dir)
+    _write(knowledge_dir / "accomplishments_work_3_manager_argusmedia.md", "argus")
+    _write(knowledge_dir / "accomplishments_work_3_fintech.md", "fintech")
+    _write(
+        prompts_dir / "section_experience_3_latest.md",
+        """---
+knowledge_files:
+  - "accomplishments_work_3_argusmedia.md"
+---
+Exp3 prompt body
+""",
+    )
+
+    with pytest.raises(PromptValidationError) as exc_info:
+        discover_prompt_templates(prompts_dir, knowledge_dir)
+
+    assert "Ambiguous knowledge file match" in str(exc_info.value)
+
+
 def test_discover_prompt_templates_fails_on_duplicate_normalized_experience_sections() -> (
     None
 ):
