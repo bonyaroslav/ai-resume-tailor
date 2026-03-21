@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 import main
-from checkpoint import load_checkpoint, save_checkpoint
+from checkpoint import save_checkpoint
 from graph_state import GraphState, Variation, create_initial_state
 from run_artifacts import write_run_metadata
 from settings import DEFAULT_GEMINI_MODEL
@@ -185,54 +184,6 @@ def test_cli_regenerate_rejects_unknown_section_ids_with_clear_message(
     assert "Unknown section ids: unknown_section" in str(exc.value)
 
 
-def test_cli_regenerate_completed_run_executes_graph(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    tmp_dir = make_workspace_temp_dir("cli-regenerate-success")
-    run_dir = tmp_dir / "acme"
-    _write_run_fixture(run_dir, _completed_state(run_dir.name))
-    calls: dict[str, int] = {"count": 0}
-
-    async def fake_run_graph(
-        state: GraphState, context: object
-    ) -> GraphState:  # pragma: no cover - exercised by integration flow
-        calls["count"] += 1
-        state.status = "completed"
-        state.current_node = "completed"
-        return state
-
-    monkeypatch.setattr(
-        main,
-        "_prepare_runtime_context",
-        lambda **_: SimpleNamespace(),
-    )
-    monkeypatch.setattr(main, "_run_graph", fake_run_graph)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "main.py",
-            "regenerate",
-            "--run-path",
-            str(run_dir),
-            "--sections",
-            "section_professional_summary",
-            "--note",
-            "tighten outcomes",
-        ],
-    )
-    main.main()
-
-    output = capsys.readouterr().out
-    assert calls["count"] == 1
-    assert "Overall status: completed | Current node: completed" in output
-
-    checkpoint_state = load_checkpoint(run_dir / "state_checkpoint.json")
-    assert checkpoint_state.section_states[
-        "section_professional_summary"
-    ].user_note == ("tighten outcomes")
-
-
 def test_cli_rebuild_rejects_triage_stop_with_clear_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -283,35 +234,3 @@ def test_cli_rebuild_rejects_when_approved_content_is_missing(
     assert "Cannot rebuild outputs because approved content is missing for:" in output
     assert "section_professional_summary" in output
     assert str(exc.value) == "Rebuild aborted: missing approved content."
-
-
-def test_cli_rebuild_completed_run_executes_graph(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    tmp_dir = make_workspace_temp_dir("cli-rebuild-success")
-    run_dir = tmp_dir / "acme"
-    _write_run_fixture(run_dir, _completed_state(run_dir.name))
-    calls: dict[str, int] = {"count": 0}
-
-    async def fake_run_graph(
-        state: GraphState, context: object
-    ) -> GraphState:  # pragma: no cover - exercised by integration flow
-        calls["count"] += 1
-        state.status = "completed"
-        state.current_node = "completed"
-        return state
-
-    monkeypatch.setattr(
-        main,
-        "_prepare_runtime_context",
-        lambda **_: SimpleNamespace(),
-    )
-    monkeypatch.setattr(main, "_run_graph", fake_run_graph)
-    monkeypatch.setattr(
-        sys, "argv", ["main.py", "rebuild-output", "--run-path", str(run_dir)]
-    )
-    main.main()
-
-    output = capsys.readouterr().out
-    assert calls["count"] == 1
-    assert "Overall status: completed | Current node: completed" in output

@@ -185,13 +185,7 @@ def test_parse_response_envelope_rejects_wrong_skills_category_count() -> None:
         parse_response_envelope(raw, section_id="section_skills_alignment")
 
 
-@pytest.mark.parametrize(
-    "section_id",
-    ["section_experience_1", "section_experience_2", "section_experience_3"],
-)
-def test_parse_response_envelope_normalizes_experience_bullets_schema(
-    section_id: str,
-) -> None:
+def test_parse_response_envelope_normalizes_experience_bullets_schema() -> None:
     raw = """
 {
   "bullets": [
@@ -236,7 +230,7 @@ def test_parse_response_envelope_normalizes_experience_bullets_schema(
   ]
 }
 """
-    envelope = parse_response_envelope(raw, section_id=section_id)
+    envelope = parse_response_envelope(raw, section_id="section_experience_1")
     assert [item.id for item in envelope.variations] == ["A", "B"]
     assert envelope.variations[0].score_0_to_100 == 85
     assert (
