@@ -2,7 +2,7 @@
 
 <div align="center">
   <h2>🚀 AI Resume Tailor</h2>
-  <p><b>A Python LLM workflow for evidence-grounded resume tailoring and human-reviewed CV generation</b></p>
+  <p><b>A deterministic Python GenAI workflow for evidence-grounded resume tailoring and human-reviewed CV generation</b></p>
 
   <p align="center">
     <a href="https://github.com/your_username/ai-resume-tailor/issues">Report Bug</a>
@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/badge/Google_AI_Studio-Free_Tier_Friendly-4285F4.svg?style=for-the-badge&logo=google" alt="Google AI Studio Free Tier Friendly">
   </p>
 
-  <p><b>Designed to work within Gemini free-tier limits</b> · Cost-aware defaults · Checkpointed runs · Structured LLM outputs · Human review gates</p>
+  <p><b>Designed to work within Gemini free-tier limits</b> · Role-aware prompt packs · Checkpointed runs · Structured LLM outputs · Human review gates</p>
 </div>
 
 ---
@@ -27,54 +27,100 @@
 
 **The Problem:** Resume tailoring is repetitive, easy to get wrong, and one-shot LLM rewrites often miss role-specific language or overstate experience.
 
-**The Solution:** `AI Resume Tailor` is a Python CLI that orchestrates job-description analysis, section-level generation, human review, and final `.docx` assembly through an explicit graph workflow. It uses structured LLM outputs, scoped context injection, and resumable checkpoints to keep generation traceable and grounded in real experience.
+**The Solution:** `AI Resume Tailor` treats resume tailoring as a controlled workflow rather than a one-shot prompt. It combines explicit graph routing, role-aware prompt packs, prompt-declared knowledge dependencies, structured Gemini outputs, resumable checkpoints, and human review gates to keep generation traceable, grounded, and easy to correct.
 
 ---
 
 ## ✨ Key Features
 
-* **🎯 Evidence-Grounded Tailoring:** Rewrites resume sections against the target role without inventing experience.
-* **🔄 Graph-Orchestrated Workflow:** Uses explicit fan-out/fan-in routing with targeted regeneration for rejected sections.
-* **🛑 Human Approval Gates:** Built-in checkpointing pauses execution for choose/edit/retry decisions before final export.
-* **🔌 Structured LLM Layer:** Gemini calls are centralized and validated through strict response envelopes.
-* **📚 Scoped Context Injection:** Prompt frontmatter loads only the knowledge files each section actually needs.
+* **🎯 Evidence-Grounded Tailoring:** Resume sections are rewritten against the target role without inventing experience, using role-specific accomplishments, skills matrices, and writing rules.
+* **🧭 Deterministic Workflow Graph:** Triage, generation, review, assembly, and audit are explicit nodes with predictable transitions and targeted regeneration.
+* **📦 Role-Aware Prompt Packs:** `input_profile` selects the active `prompts/<profile>/`, `knowledge/<profile>/`, offline fixtures, and DOCX template.
+* **📚 Scoped Context Contracts:** Prompt frontmatter declares exact `knowledge_files` per section instead of loading the whole knowledge base.
+* **♻️ Run-Scoped Gemini Cached Content:** Stable knowledge files plus the run's JD are uploaded once and reused across section generation for lower token churn.
+* **🛑 Human Approval Gates:** Review supports `choose`, `edit`, `retry`, and `save_and_exit` before final export.
+* **🔌 Structured LLM Layer:** Gemini calls are centralized and validated through strict JSON or Markdown output contracts.
 * **💾 Resumable Run Artifacts:** Checkpoints, logs, outputs, and the source JD are persisted under `runs/`.
 
 ---
 
 ## 🧠 System Architecture
 
-Instead of relying on heavy third-party agent frameworks, this core engine is built as a native, lightweight **Directed Graph State Machine** with explicit routing and small functions.
+This project does not rely on a generic agent framework. It models the workflow directly in Python as a small, explicit state machine with checkpointed state, role-aware prompt resolution, and deterministic node routing.
+
+That design is the point: the interesting part is not "LLM + prompts", but a controlled GenAI pipeline with:
+
+* explicit graph nodes and checkpointed `GraphState`
+* `input_profile`-based prompt and knowledge packs
+* prompt-declared evidence files per section
+* run-scoped Gemini cached content reused across section generation
+* strict machine-checked response contracts
+* human review before final assembly
+
+### Runtime Flow
 
 ```mermaid
-graph TD
-    A[Start: CLI Input JD] --> B(Node 1: Triage)
-    B -->|Cross-reference JD vs Base Skills| C{Is it a fit?}
-    C -->|No-Go| D[Terminate Pipeline]
-    C -->|Go| E(Node 2: Concurrent Fan-Out)
-    
-    E --> F[Generate Summary]
-    E --> G[Generate Exp 1]
-    E --> H[Generate Exp 2]
-    
-    F --> I(Node 3: Human-in-the-Loop Checkpoint)
-    G --> I
-    H --> I
-    
-    I -->|User Rejects a Draft| J[Capture Feedback String]
-    J -. Backward Edge .-> E
-    
-    I -->|User Approves All| K(Node 4: Assembly)
-    K --> L["Inject {{Placeholders}}"]
-    L --> M[Export CV.docx]
+flowchart TD
+    A["CLI Run<br/>JD + company + input_profile"] --> B["Load prompt pack<br/>prompts/&lt;input_profile&gt;/"]
+    B --> C["Validate prompt set<br/>canonical section ids + frontmatter"]
+    C --> D["Prepare run-scoped cache<br/>stable knowledge files + JD"]
+    D --> E["Triage node<br/>fit / risks / decision"]
 
+    E -->|stop| F["Checkpoint as triage_stop"]
+    E -->|continue| G["Generate pending sections<br/>sequential by default, concurrent optional"]
+
+    G --> H["Professional summary"]
+    G --> I["Skills alignment"]
+    G --> J["Experience 1..3"]
+    G --> K["Cover letter"]
+
+    H --> L["Review queue"]
+    I --> L
+    J --> L
+    K --> L
+
+    L -->|choose or edit| M["Approve selected content"]
+    L -->|retry with note| G
+    L -->|save_and_exit| N["Checkpoint and resume later"]
+
+    M --> O["Assemble DOCX + cover letters"]
+    O --> P["Deep-dive audit"]
+    P --> Q["Completed run artifacts"]
 ```
+
+### Context Contract (`input_profile=role_engineer`)
+
+```mermaid
+flowchart LR
+    A["input_profile = role_engineer"] --> B["prompts/role_engineer/*.md"]
+    A --> C["knowledge/role_engineer/*.md"]
+    A --> D["knowledge/role_engineer/Template - YB Senior Software Engineer.docx"]
+
+    B --> E["Prompt frontmatter<br/>knowledge_files: [...]"]
+    E --> F["Resolve exact knowledge subset"]
+
+    C --> F
+    F --> G["Stable knowledge fingerprint"]
+    G --> H["Run-scoped Gemini cached content"]
+    H --> I["Section generation with JSON/Markdown contract"]
+```
+
+### `role_engineer` Context Examples
+
+The current `role_engineer` profile already shows why the context model is interesting:
+
+* `section_professional_summary` pulls the skills matrix, multiple accomplishments files, and summary-writing rules.
+* `section_skills_alignment` uses only the skills matrix, keeping the prompt narrow and truth-constrained.
+* `section_experience_3_latest` combines the latest-role accomplishments file, bullet-writing rules, and the skills matrix.
+
+This keeps each section grounded in a deliberately scoped evidence set instead of sending the full knowledge directory every time.
 
 ### 📐 Architecture Decision Records (ADRs)
 
 1. **Why a Custom State Machine over LangChain?** For a strictly scoped CLI tool, a plain Python state machine is easier to read, easier to test, and harder to over-engineer.
-2. **Context Isolation via Frontmatter:**
-To reduce hallucination risk and avoid context bloat, prompts do not read the entire knowledge base blindly. Markdown prompts use YAML frontmatter to request *only* the specific files they need.
+2. **Context Isolation via Frontmatter:** To reduce hallucination risk and avoid context bloat, prompts do not read the entire knowledge base blindly. Markdown prompts request only the specific files they need.
+3. **Cache Reuse over Prompt Bloat:** Stable knowledge files are fingerprinted and reused through Gemini cached content, while the job description remains run-scoped.
+4. **Human Review over Autonomous Rewrite Loops:** The tool optimizes for operator control and targeted retries, not self-directed regeneration chains.
 
 
 ---
@@ -93,18 +139,22 @@ V1 focuses on delivering a deterministic, lightweight State Machine. Once the co
 
 To complement the vision above, the current shipped V1 behavior is strict and deterministic:
 
-* **Canonical workflow IDs:** `triage_job_fit_and_risks`, `section_professional_summary`, `section_skills_alignment`, `section_experience_1..3`, `doc_cover_letter`
-* **Single checkpoint contract:** `GraphState` persisted as `state_version=1.0` for pause/resume consistency
-* **Strict AI response envelope:** `{"variations":[{"id","score_0_to_100","ai_reasoning","content_for_template"}]}`
+* **Canonical workflow IDs:** `triage_job_fit_and_risks`, `section_professional_summary`, `section_skills_alignment`, `section_experience_1..3`, `doc_cover_letter`, `audit_cv_deep_dive`
+* **Single checkpoint contract:** `GraphState` persisted with versioned state for pause/resume consistency
+* **Role-aware runtime resolution:** prompts, knowledge, offline fixtures, and default template are selected from `input_profile`
+* **Strict AI response contracts:** JSON envelopes for triage and generation; Markdown contract for the audit report
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
+* **Generation controls:** sequential by default, concurrent optional, with pacing and 429 backoff
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
 * **Run outputs:** `tailored_cv.docx`, `cover_letters.md`, `cv_deep_dive_audit.md`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
 
 ## 🤖 Why It Is Interesting for GenAI Engineering
 
-* **Structured generation contracts:** Every prompt is expected to return machine-readable variations rather than free-form prose.
+* **Structured generation contracts:** Prompts return machine-readable outputs that can be parsed, validated, and retried with bounded logic.
+* **Role-aware context selection:** `input_profile` lets the same workflow operate over different prompt and knowledge packs.
+* **Scoped evidence loading:** Section prompts declare their own knowledge dependencies instead of relying on a monolithic prompt context.
+* **Cache-aware LLM integration:** Stable knowledge and the run JD are prepared once, then reused through Gemini cached content across node execution.
 * **Human review gates over autonomous loops:** Review happens before final output, keeping control with the operator.
-* **Retrieval-ready context design:** Prompt frontmatter already constrains context loading and can evolve into retrieval-based selection later.
 * **Deterministic offline validation:** Offline fixtures make it possible to exercise the workflow without live API calls.
 
 Current CLI commands:
