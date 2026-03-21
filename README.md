@@ -106,9 +106,9 @@ flowchart TD
 
     subgraph KNOWLEDGE["Knowledge Layer"]
         KM["profile_technical_skills_matrix.md"]
-        A1["accomplishments_work_1_justeat_2016-2019.md"]
-        A2["accomplishments_work_2_justeat_2019-2021.md"]
-        A3["accomplishments_work_3_argusmedia.md"]
+        A1["accomplishments_work_1_older.md"]
+        A2["accomplishments_work_2_previous.md"]
+        A3["accomplishments_work_3_latest.md"]
         RS["rules_professional_summary.md"]
         RB["rules_bullet_points_formatting.md"]
         RC["rules_cover_letter_playbook.md"]
