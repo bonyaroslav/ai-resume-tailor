@@ -88,32 +88,111 @@ flowchart TD
     P --> Q["Completed run artifacts"]
 ```
 
-### Context Contract (`input_profile=role_engineer`)
+### Prompt-Knowledge Network (`input_profile=role_engineer`)
+
+Automatic generation runs first by default to save time. Human review comes after generation as a correction gate for selection, edits, or targeted retries.
+
+The prompt network below is intentionally collapsed because it is a deeper architecture view rather than the first-read workflow diagram.
+
+<details>
+  <summary><b>Open prompt-to-knowledge dependency diagram</b></summary>
 
 ```mermaid
-flowchart LR
-    A["input_profile = role_engineer"] --> B["prompts/role_engineer/*.md"]
-    A --> C["knowledge/role_engineer/*.md"]
-    A --> D["knowledge/role_engineer/Template - YB Senior Software Engineer.docx"]
+flowchart TD
+    subgraph INPUTS["Run Inputs"]
+        JD["job_description.md"]
+        PROFILE["input_profile = role_engineer"]
+    end
 
-    B --> E["Prompt frontmatter<br/>knowledge_files: [...]"]
-    E --> F["Resolve exact knowledge subset"]
+    subgraph KNOWLEDGE["Knowledge Layer"]
+        KM["profile_technical_skills_matrix.md"]
+        A1["accomplishments_work_1_justeat_2016-2019.md"]
+        A2["accomplishments_work_2_justeat_2019-2021.md"]
+        A3["accomplishments_work_3_argusmedia.md"]
+        RS["rules_professional_summary.md"]
+        RB["rules_bullet_points_formatting.md"]
+        RC["rules_cover_letter_playbook.md"]
+        CL["constraints_legal_and_location_blockers.md"]
+    end
 
-    C --> F
-    F --> G["Stable knowledge fingerprint"]
-    G --> H["Run-scoped Gemini cached content"]
-    H --> I["Section generation with JSON/Markdown contract"]
+    subgraph PROMPTS["Prompt Layer"]
+        TRIAGE["triage_job_fit_and_risks"]
+        SUMMARY["section_professional_summary"]
+        SKILLS["section_skills_alignment"]
+        EXP1["section_experience_1"]
+        EXP2["section_experience_2"]
+        EXP3["section_experience_3"]
+        COVER["doc_cover_letter"]
+    end
+
+    subgraph EXECUTION["Execution Layer"]
+        CACHE["run-scoped cached content"]
+        GEN["automatic generation<br/>default path"]
+        REVIEW["review / retry / edit"]
+        OUT["DOCX assembly + audit outputs"]
+    end
+
+    PROFILE --> TRIAGE
+    PROFILE --> SUMMARY
+    PROFILE --> SKILLS
+    PROFILE --> EXP1
+    PROFILE --> EXP2
+    PROFILE --> EXP3
+    PROFILE --> COVER
+
+    JD --> TRIAGE
+    JD --> SUMMARY
+    JD --> SKILLS
+    JD --> EXP1
+    JD --> EXP2
+    JD --> EXP3
+    JD --> COVER
+
+    KM --> TRIAGE
+    KM --> SUMMARY
+    KM --> SKILLS
+    KM --> EXP1
+    KM --> EXP2
+    KM --> EXP3
+    KM --> COVER
+
+    CL --> TRIAGE
+    RS --> SUMMARY
+    RB --> EXP1
+    RB --> EXP2
+    RB --> EXP3
+    RC --> COVER
+    A1 --> SUMMARY
+    A1 --> EXP1
+    A1 --> COVER
+    A2 --> SUMMARY
+    A2 --> EXP2
+    A2 --> COVER
+    A3 --> SUMMARY
+    A3 --> EXP3
+    A3 --> COVER
+
+    TRIAGE --> CACHE
+    SUMMARY --> CACHE
+    SKILLS --> CACHE
+    EXP1 --> CACHE
+    EXP2 --> CACHE
+    EXP3 --> CACHE
+    COVER --> CACHE
+
+    CACHE --> GEN
+    GEN --> REVIEW
+    REVIEW --> OUT
 ```
 
-### `role_engineer` Context Examples
+</details>
 
-The current `role_engineer` profile already shows why the context model is interesting:
+This view shows the dependency shape that matters operationally:
 
-* `section_professional_summary` pulls the skills matrix, multiple accomplishments files, and summary-writing rules.
-* `section_skills_alignment` uses only the skills matrix, keeping the prompt narrow and truth-constrained.
-* `section_experience_3_latest` combines the latest-role accomplishments file, bullet-writing rules, and the skills matrix.
-
-This keeps each section grounded in a deliberately scoped evidence set instead of sending the full knowledge directory every time.
+* prompts do not consume the full knowledge directory blindly
+* shared truth sources such as the skills matrix are reused across multiple prompts
+* accomplishment files are routed only to the sections they can credibly support
+* writing-rule files shape output differently for summary, bullets, and cover letter generation
 
 ### 📐 Architecture Decision Records (ADRs)
 
