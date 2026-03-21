@@ -51,11 +51,32 @@ $RunnerConfig = @{
     TemplatePath = ""
     Debug = $false
     RunHealthCheck = $true
+    # Reuse uploaded knowledge and Gemini cached content when possible.
+    # Keep this ON for normal use.
+    # Example: leave ON for daily runs to avoid uploading the same knowledge again.
     UseRoleWideKnowledgeCache = $true
+    # Force a fresh run cache for the current run instead of reusing an existing one.
+    # Turn ON when resuming or regenerating after changing knowledge files for the same run.
+    # Example: you edited role_engineer knowledge and now run `resume` for an old run.
     InvalidateRoleWideKnowledgeCache = $false
+    # Re-upload all knowledge files even if unchanged copies already exist in the local cache registry.
+    # Turn ON only for a full cache reset or when uploaded file reuse looks wrong.
+    # Example: you switched from role_engineer to role_manager and want a completely clean re-upload.
     ForceKnowledgeReupload = $false
+    # Fail fast if Gemini says the cache was not actually used.
+    # Keep this ON unless you are debugging cache behavior.
+    # Example: leave ON to catch cases where cached content exists but requests still send full tokens.
     RequireCachedTokenConfirmation = $true
+    # What to do after triage:
+    # "prompt" = ask you, "follow_ai" = follow model verdict, "always_continue" = never stop at triage.
+    # Example: use "always_continue" when you want the pipeline to keep going without pauses.
     TriageDecisionMode = "always_continue"
+    # How long the Gemini run cache stays valid, in seconds.
+    # Increase for repeated work in a short window; decrease if you want caches to expire sooner.
+    # Example: 3600 = reuse for 1 hour.
     KnowledgeCacheTtlSeconds = 3600
+    # Local JSON file that remembers uploaded knowledge files and run cache metadata.
+    # Keep the default unless you intentionally want a separate cache registry.
+    # Example: use a different path only if you want isolated caches for experiments.
     KnowledgeCacheRegistryPath = ".\runs\_cache\role_wide_knowledge_cache_registry.json"
 }
