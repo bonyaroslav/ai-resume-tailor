@@ -27,7 +27,7 @@ class AiOutputRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     attempt: int = Field(ge=1)
-    status: Literal["parsed", "parse_error", "schema_error"]
+    status: Literal["received", "parsed", "parse_error", "schema_error"]
     raw_response: str
     parsed_payload: dict[str, object] | None = None
     normalized_payload: dict[str, object] | None = None

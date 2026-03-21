@@ -67,18 +67,6 @@ TRIAGE_DECISION_MODES = {
     TRIAGE_DECISION_MODE_FOLLOW_AI,
     TRIAGE_DECISION_MODE_ALWAYS_CONTINUE,
 }
-AUDIT_REQUIRED_HEADINGS: tuple[str, ...] = (
-    "# Deep Dive CV Audit",
-    "## Executive Summary",
-    "## ATS Match Rate",
-    "## Keyword Gap Analysis",
-    "## Hiring Manager Read",
-    "## Section-by-Section Critique",
-    "## Evidence Gaps",
-    "## Prioritized Fixes",
-    "## Rewrite Directions",
-    "## Final Verdict",
-)
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -380,21 +368,13 @@ async def _generate_section_variations(
             )
         except QuotaExceededError as exc:
             raise exc.with_section_id(section_id) from exc
-        if context.debug_mode:
-            _write_debug_response(context.run_dir, section_id, attempt, result.text)
-
-        output_attempt = _next_ai_output_attempt(section_state)
+        _write_raw_response(context.run_dir, section_id, attempt, result.text)
+        output_record = _append_ai_output_record(section_state, result.text)
         try:
             parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
-            section_state.ai_outputs.append(
-                AiOutputRecord(
-                    attempt=output_attempt,
-                    status="parse_error",
-                    raw_response=result.text,
-                    error_detail=str(exc),
-                )
-            )
+            output_record.status = "parse_error"
+            output_record.error_detail = str(exc)
             log_failure(
                 logger,
                 category="parse_error",
@@ -415,15 +395,9 @@ async def _generate_section_variations(
             )
             envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
         except ResponseSchemaError as exc:
-            section_state.ai_outputs.append(
-                AiOutputRecord(
-                    attempt=output_attempt,
-                    status="schema_error",
-                    raw_response=result.text,
-                    parsed_payload=parsed_payload,
-                    error_detail=str(exc),
-                )
-            )
+            output_record.status = "schema_error"
+            output_record.parsed_payload = parsed_payload
+            output_record.error_detail = str(exc)
             log_failure(
                 logger,
                 category="schema_error",
@@ -436,15 +410,9 @@ async def _generate_section_variations(
             last_error = exc
             continue
 
-        section_state.ai_outputs.append(
-            AiOutputRecord(
-                attempt=output_attempt,
-                status="parsed",
-                raw_response=result.text,
-                parsed_payload=payload.parsed_payload,
-                normalized_payload=payload.normalized_payload,
-            )
-        )
+        output_record.status = "parsed"
+        output_record.parsed_payload = payload.parsed_payload
+        output_record.normalized_payload = payload.normalized_payload
 
         if not envelope.variations:
             last_error = ResponseSchemaError("Envelope contains no variations.")
@@ -488,30 +456,31 @@ async def _generate_section_variations(
     ) from last_error
 
 
-def _write_debug_response(
+def _write_raw_response(
     run_dir: Path, section_id: str, attempt: int, raw_response: str
 ) -> None:
-    debug_dir = run_dir / "debug"
-    debug_dir.mkdir(parents=True, exist_ok=True)
+    responses_dir = run_dir / "responses"
+    responses_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{section_id}.attempt_{attempt + 1}.raw_response.txt"
-    (debug_dir / filename).write_text(raw_response, encoding="utf-8")
+    (responses_dir / filename).write_text(raw_response, encoding="utf-8")
 
 
-def _validate_audit_markdown(markdown: str) -> str:
+def _append_ai_output_record(
+    section_state: SectionState, raw_response: str
+) -> AiOutputRecord:
+    output_record = AiOutputRecord(
+        attempt=_next_ai_output_attempt(section_state),
+        status="received",
+        raw_response=raw_response,
+    )
+    section_state.ai_outputs.append(output_record)
+    return output_record
+
+
+def _normalize_audit_markdown(markdown: str) -> str:
     normalized = markdown.strip()
     if not normalized:
         raise ResponseSchemaError("Audit response is empty.")
-    if not normalized.startswith("#"):
-        raise ResponseSchemaError("Audit response must start with a Markdown heading.")
-
-    missing_headings = [
-        heading for heading in AUDIT_REQUIRED_HEADINGS if heading not in normalized
-    ]
-    if missing_headings:
-        missing = ", ".join(missing_headings)
-        raise ResponseSchemaError(
-            f"Audit response is missing required headings: {missing}."
-        )
     return normalized
 
 
@@ -539,23 +508,13 @@ async def _generate_triage_result(
         except QuotaExceededError as exc:
             raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
 
-        if context.debug_mode:
-            _write_debug_response(
-                context.run_dir, TRIAGE_SECTION_ID, attempt, result.text
-            )
-
-        output_attempt = _next_ai_output_attempt(section_state)
+        _write_raw_response(context.run_dir, TRIAGE_SECTION_ID, attempt, result.text)
+        output_record = _append_ai_output_record(section_state, result.text)
         try:
             parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
-            section_state.ai_outputs.append(
-                AiOutputRecord(
-                    attempt=output_attempt,
-                    status="parse_error",
-                    raw_response=result.text,
-                    error_detail=str(exc),
-                )
-            )
+            output_record.status = "parse_error"
+            output_record.error_detail = str(exc)
             log_failure(
                 logger,
                 category="parse_error",
@@ -571,15 +530,9 @@ async def _generate_triage_result(
         try:
             triage_result = parse_triage_result(result.text)
         except ResponseSchemaError as exc:
-            section_state.ai_outputs.append(
-                AiOutputRecord(
-                    attempt=output_attempt,
-                    status="schema_error",
-                    raw_response=result.text,
-                    parsed_payload=parsed_payload,
-                    error_detail=str(exc),
-                )
-            )
+            output_record.status = "schema_error"
+            output_record.parsed_payload = parsed_payload
+            output_record.error_detail = str(exc)
             log_failure(
                 logger,
                 category="schema_error",
@@ -592,17 +545,11 @@ async def _generate_triage_result(
             last_error = exc
             continue
 
-        section_state.ai_outputs.append(
-            AiOutputRecord(
-                attempt=output_attempt,
-                status="parsed",
-                raw_response=result.text,
-                parsed_payload=parsed_payload,
-                normalized_payload={
-                    "triage_result": triage_result.model_dump(mode="json")
-                },
-            )
-        )
+        output_record.status = "parsed"
+        output_record.parsed_payload = parsed_payload
+        output_record.normalized_payload = {
+            "triage_result": triage_result.model_dump(mode="json")
+        }
         return triage_result
 
     raise RuntimeError(
@@ -1080,19 +1027,10 @@ async def node_audit(
         context=context,
         logger=logger,
     )
-    if context.debug_mode:
-        _write_debug_response(context.run_dir, AUDIT_SECTION_ID, 0, result.text)
-
-    output_attempt = _next_ai_output_attempt(section_state)
-    audit_markdown = _validate_audit_markdown(result.text)
-
-    section_state.ai_outputs.append(
-        AiOutputRecord(
-            attempt=output_attempt,
-            status="parsed",
-            raw_response=result.text,
-        )
-    )
+    _write_raw_response(context.run_dir, AUDIT_SECTION_ID, 0, result.text)
+    output_record = _append_ai_output_record(section_state, result.text)
+    audit_markdown = _normalize_audit_markdown(result.text)
+    output_record.status = "parsed"
     section_state.variations = []
     section_state.selected_variation_id = None
     section_state.selected_content = audit_markdown

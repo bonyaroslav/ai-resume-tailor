@@ -62,7 +62,7 @@ $RunnerConfig = @{
     # Re-upload all knowledge files even if unchanged copies already exist in the local cache registry.
     # Turn ON only for a full cache reset or when uploaded file reuse looks wrong.
     # Example: you switched from role_engineer to role_manager and want a completely clean re-upload.
-    ForceKnowledgeReupload = $false
+    ForceKnowledgeReupload = $true
     # Fail fast if Gemini says the cache was not actually used.
     # Keep this ON unless you are debugging cache behavior.
     # Example: leave ON to catch cases where cached content exists but requests still send full tokens.

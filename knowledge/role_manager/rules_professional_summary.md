@@ -1,5 +1,10 @@
 ## Set of Rules for an EM Professional Summary
 
+## Candidate Context (CRITICAL FACTS)
+- Total Engineering Experience: 10+ years
+- Total Management/Leadership Experience: 6+ years
+- *Rule:* Always use these exact numbers when referencing total years of experience in the templates. Do not attempt to calculate years of experience from the work history dates.
+
 ### 0) Scope & Output Contract
 
 This module is only for the short professional summary used at the top of a:
