@@ -115,3 +115,12 @@ def test_active_prompts_keep_universal_json_envelope_contract() -> None:
             assert (
                 '"text"' not in template.body
             ), "Prompt 'section_skills_alignment' must use categories instead of text."
+            assert (
+                '"rendered_text"' not in template.body
+            ), "Prompt 'section_skills_alignment' must not use rendered_text."
+            assert (
+                '"included_with_qualifier"' not in template.body
+            ), "Prompt 'section_skills_alignment' must not request extra meta keys."
+            assert (
+                '"excluded_low_evidence_or_low_value"' not in template.body
+            ), "Prompt 'section_skills_alignment' must not request extra meta keys."

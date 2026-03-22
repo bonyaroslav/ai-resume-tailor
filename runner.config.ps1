@@ -6,17 +6,19 @@ $RunnerConfig = @{
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ TheWhiteam.md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Algoteque hub.md"
     ##2 UPDATE before run
-    CompanyName = "TheWhiteeam"
+    CompanyName = "Algoteque"
     ##3 UPDATE before run
-    JobTitle = ".NET Developer, Remote (EU) "
+    JobTitle = "Full-stack Developer (.NET/C#) - Windows Forms"
     ##4 UPDATE before run
-    OutputCvFileName = "TheWhiteeam - Software Engineer - YB.docx"
+    OutputCvFileName = "Algoteque - Software Engineer - YB.docx"
     ##5 UPDATE before run
     TierName = "freetier"
     ##6 UPDATE before run
     InputProfile = "role_engineer"
+
+    ###7 Save File!
 
     # Manual override for the selected tier model.
     # Leave empty to use TierProfiles.<TierName>.ModelName.
