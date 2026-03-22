@@ -6,7 +6,7 @@ from pathlib import Path
 
 from docx import Document
 
-import graph_nodes
+import graph_generation
 import main as main_module
 from checkpoint import load_checkpoint
 from graph_nodes import RuntimeContext
@@ -297,7 +297,9 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
         except StopIteration as exc:
             raise AssertionError("Review requested more inputs than expected.") from exc
 
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr("builtins.input", fake_input)
 
     final_state = asyncio.run(_run_graph(state, context))
@@ -373,7 +375,9 @@ def test_run_graph_debug_mode_persists_raw_responses(monkeypatch: object) -> Non
         except StopIteration as exc:
             raise AssertionError("Review requested more inputs than expected.") from exc
 
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr("builtins.input", fake_input)
 
     final_state = asyncio.run(_run_graph(state, context))
@@ -459,7 +463,9 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
             )
         return _result(_fake_response_for_section(resolved_section_id))
 
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr("builtins.input", lambda _: "stop")
 
     final_state = asyncio.run(_run_graph(state, context))
@@ -535,7 +541,9 @@ def test_run_graph_always_continue_ignores_avoid_triage(monkeypatch: object) -> 
             )
         return _result(_fake_response_for_section(resolved_section_id))
 
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr(
         "builtins.input",
         lambda _: (_ for _ in ()).throw(AssertionError("input should not be called")),
@@ -593,7 +601,9 @@ def test_run_graph_passes_cached_content_and_skips_inline_knowledge(
     def fake_input(_: str = "") -> str:
         return next(response_iter)
 
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr("builtins.input", fake_input)
 
     final_state = asyncio.run(_run_graph(state, context))
@@ -657,7 +667,9 @@ def test_run_graph_prepares_role_wide_knowledge_cache_before_generation(
         "prepare_run_scoped_knowledge_cache",
         fake_prepare_run_scoped_knowledge_cache,
     )
-    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr(
+        graph_generation, "generate_with_gemini", fake_generate_with_gemini
+    )
     monkeypatch.setattr(
         "builtins.input",
         lambda _: (_ for _ in ()).throw(AssertionError("input should not be called")),

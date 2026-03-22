@@ -1,0 +1,722 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from time import monotonic
+
+from console_ui import (
+    render_prompt,
+    render_triage_decision_prompt,
+    render_triage_result,
+)
+from graph_state import (
+    AiOutputRecord,
+    GraphState,
+    ResponseEnvelope,
+    SectionState,
+    TriageResult,
+    Variation,
+    touch_state,
+)
+from json_parser import (
+    ResponseParseError,
+    ResponseSchemaError,
+    parse_response_envelope_payload,
+    parse_response_payload,
+    parse_triage_result,
+)
+from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_gemini
+from logging_utils import log_failure
+from prompt_loader import build_prompt_text
+from section_ids import is_experience_section
+from workflow_definition import (
+    COVER_LETTER_SECTION_ID,
+    GENERATION_SECTION_IDS,
+    TRIAGE_SECTION_ID,
+)
+
+MAX_AUTOMATIC_PARSE_RETRIES = 1
+LLM_HEARTBEAT_INTERVAL_SECONDS = 15
+LLM_HEARTBEAT_INTERVAL_ENV = "ART_LLM_HEARTBEAT_SECONDS"
+LLM_MIN_INTERVAL_SECONDS = 12.0
+LLM_MIN_INTERVAL_ENV = "ART_LLM_MIN_INTERVAL_SECONDS"
+GENERATION_MODE_ENV = "ART_GENERATION_MODE"
+GENERATION_MODE_SEQUENTIAL = "sequential"
+GENERATION_MODE_CONCURRENT = "concurrent"
+TRIAGE_DECISION_MODE_PROMPT = "prompt"
+TRIAGE_DECISION_MODE_FOLLOW_AI = "follow_ai"
+TRIAGE_DECISION_MODE_ALWAYS_CONTINUE = "always_continue"
+TRIAGE_DECISION_MODES = {
+    TRIAGE_DECISION_MODE_PROMPT,
+    TRIAGE_DECISION_MODE_FOLLOW_AI,
+    TRIAGE_DECISION_MODE_ALWAYS_CONTINUE,
+}
+NON_DEBUG_RAW_RESPONSE = "[omitted_non_debug]"
+
+_LAST_LLM_REQUEST_STARTED_AT: float | None = None
+_LLM_PACING_LOCK: asyncio.Lock | None = None
+
+
+@dataclass
+class RuntimeContext:
+    run_dir: Path
+    checkpoint_path: Path
+    template_path: Path
+    output_cv_path: Path
+    output_cover_letters_path: Path
+    output_audit_path: Path
+    company_name: str
+    job_description_path: Path
+    job_description: str
+    api_key: str
+    model_name: str
+    input_profile: str
+    prompt_templates: dict[str, object]
+    debug_mode: bool
+    auto_approve_review: bool
+    triage_decision_mode: str
+    use_role_wide_knowledge_cache: bool = False
+    require_cached_token_confirmation: bool = True
+    skills_category_count: int = 4
+    cached_content_name: str | None = None
+    invalidate_role_wide_knowledge_cache: bool = False
+    force_knowledge_reupload: bool = False
+    knowledge_cache_ttl_seconds: int = 0
+    knowledge_cache_registry_path: Path | None = None
+
+
+def _experience_schema_retry_note(
+    error: Exception | None, section_id: str
+) -> str | None:
+    if error is None or not is_experience_section(section_id):
+        return None
+    if "ordered variation ids" not in str(error):
+        return None
+    return (
+        "Schema correction: reuse the same variation ids for every bullet in the same "
+        "order. Prefer A, B, C without bullet-number prefixes such as 1A or 2B."
+    )
+
+
+def resolve_triage_decision_mode(value: str | None) -> str:
+    if value is None:
+        return TRIAGE_DECISION_MODE_PROMPT
+    normalized = value.strip().lower()
+    if normalized in TRIAGE_DECISION_MODES:
+        return normalized
+    return TRIAGE_DECISION_MODE_PROMPT
+
+
+def _normalize_triage_action(raw_action: str) -> str:
+    aliases = {
+        "c": "continue",
+        "s": "stop",
+    }
+    action = raw_action.strip().lower()
+    return aliases.get(action, action)
+
+
+def _prompt_triage_confirmation(*, suggested_action: str) -> str:
+    while True:
+        prompt = "Triage decision [continue/stop] (c/s): "
+        if suggested_action == "stop":
+            prompt = "Triage decision [stop/continue] (s/c): "
+        action = _normalize_triage_action(input(prompt))
+        if not action:
+            return suggested_action
+        if action in {"continue", "stop"}:
+            return action
+        print("Invalid decision. Use continue/stop (or c/s).")
+
+
+def _heartbeat_interval_seconds() -> int:
+    raw_value = os.getenv(LLM_HEARTBEAT_INTERVAL_ENV, "").strip()
+    if not raw_value:
+        return LLM_HEARTBEAT_INTERVAL_SECONDS
+    try:
+        interval = int(raw_value)
+    except ValueError:
+        return LLM_HEARTBEAT_INTERVAL_SECONDS
+    return max(1, interval)
+
+
+def _llm_min_interval_seconds() -> float:
+    raw_value = os.getenv(LLM_MIN_INTERVAL_ENV, "").strip()
+    if not raw_value:
+        return LLM_MIN_INTERVAL_SECONDS
+    try:
+        interval = float(raw_value)
+    except ValueError:
+        return LLM_MIN_INTERVAL_SECONDS
+    return max(0.0, interval)
+
+
+def _generation_mode() -> str:
+    mode = os.getenv(GENERATION_MODE_ENV, GENERATION_MODE_SEQUENTIAL).strip().lower()
+    if mode in {GENERATION_MODE_SEQUENTIAL, GENERATION_MODE_CONCURRENT}:
+        return mode
+    return GENERATION_MODE_SEQUENTIAL
+
+
+async def _wait_for_llm_pacing_slot(section_id: str, logger: logging.Logger) -> None:
+    global _LAST_LLM_REQUEST_STARTED_AT
+    global _LLM_PACING_LOCK
+
+    if _LLM_PACING_LOCK is None:
+        _LLM_PACING_LOCK = asyncio.Lock()
+
+    min_interval_seconds = _llm_min_interval_seconds()
+    if min_interval_seconds <= 0:
+        return
+
+    async with _LLM_PACING_LOCK:
+        now = monotonic()
+        if _LAST_LLM_REQUEST_STARTED_AT is not None:
+            elapsed_seconds = now - _LAST_LLM_REQUEST_STARTED_AT
+            wait_seconds = max(0.0, min_interval_seconds - elapsed_seconds)
+            if wait_seconds > 0:
+                logger.info(
+                    "LLM pacing wait section_id=%s wait_s=%.2f min_interval_s=%.2f",
+                    section_id,
+                    wait_seconds,
+                    min_interval_seconds,
+                )
+                await asyncio.sleep(wait_seconds)
+        _LAST_LLM_REQUEST_STARTED_AT = monotonic()
+        logger.info(
+            "LLM pacing slot acquired section_id=%s min_interval_s=%.2f",
+            section_id,
+            min_interval_seconds,
+        )
+
+
+def _log_llm_usage(
+    result: LlmGenerationResult,
+    *,
+    section_id: str,
+    prompt: str,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> None:
+    usage = result.usage_metadata
+    logger.info(
+        "LLM usage section_id=%s cached_content_name=%s prompt_chars=%s prompt_token_count=%s cached_content_token_count=%s candidates_token_count=%s thoughts_token_count=%s total_token_count=%s",
+        section_id,
+        context.cached_content_name or "-",
+        len(prompt),
+        usage.prompt_token_count if usage.prompt_token_count is not None else "-",
+        (
+            usage.cached_content_token_count
+            if usage.cached_content_token_count is not None
+            else "-"
+        ),
+        (
+            usage.candidates_token_count
+            if usage.candidates_token_count is not None
+            else "-"
+        ),
+        usage.thoughts_token_count if usage.thoughts_token_count is not None else "-",
+        usage.total_token_count if usage.total_token_count is not None else "-",
+    )
+    if not context.cached_content_name:
+        return
+    if not context.require_cached_token_confirmation:
+        return
+    cached_tokens = usage.cached_content_token_count or 0
+    if cached_tokens <= 0:
+        raise RuntimeError(
+            "Cached token confirmation failed for "
+            f"section '{section_id}' using '{context.cached_content_name}'."
+        )
+
+
+async def _request_llm(
+    *,
+    prompt: str,
+    section_id: str,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> LlmGenerationResult:
+    heartbeat_interval_seconds = _heartbeat_interval_seconds()
+    await _wait_for_llm_pacing_slot(section_id, logger)
+    logger.info(
+        "LLM request started section_id=%s heartbeat_s=%s cached_content_name=%s",
+        section_id,
+        heartbeat_interval_seconds,
+        context.cached_content_name or "-",
+    )
+    request_started = monotonic()
+    request_task = asyncio.create_task(
+        generate_with_gemini(
+            prompt,
+            context.api_key,
+            context.model_name,
+            section_id,
+            context.cached_content_name,
+            context.skills_category_count,
+        )
+    )
+    while True:
+        try:
+            result = await asyncio.wait_for(
+                asyncio.shield(request_task),
+                timeout=heartbeat_interval_seconds,
+            )
+            break
+        except asyncio.TimeoutError:
+            elapsed_s = int(monotonic() - request_started)
+            logger.info(
+                "LLM request in progress section_id=%s elapsed_s=%s",
+                section_id,
+                elapsed_s,
+            )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(section_id) from exc
+    logger.info(
+        "LLM request completed section_id=%s duration_ms=%s",
+        section_id,
+        int((monotonic() - request_started) * 1000),
+    )
+    _log_llm_usage(
+        result,
+        section_id=section_id,
+        prompt=prompt,
+        context=context,
+        logger=logger,
+    )
+    return result
+
+
+def _next_ai_output_attempt(section_state: SectionState) -> int:
+    return len(section_state.ai_outputs) + 1
+
+
+def _raw_response_for_storage(*, raw_response: str, debug_mode: bool) -> str:
+    if debug_mode:
+        return raw_response
+    return NON_DEBUG_RAW_RESPONSE
+
+
+def _persist_raw_response_artifact(
+    run_dir: Path,
+    *,
+    section_id: str,
+    attempt: int,
+    raw_response: str,
+    debug_mode: bool,
+) -> None:
+    if not debug_mode:
+        return
+    responses_dir = run_dir / "responses"
+    responses_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{section_id}.attempt_{attempt + 1}.raw_response.txt"
+    (responses_dir / filename).write_text(raw_response, encoding="utf-8")
+
+
+def _record_ai_output(
+    *,
+    run_dir: Path,
+    section_id: str,
+    attempt: int,
+    raw_response: str,
+    section_state: SectionState,
+    debug_mode: bool,
+) -> AiOutputRecord:
+    _persist_raw_response_artifact(
+        run_dir,
+        section_id=section_id,
+        attempt=attempt,
+        raw_response=raw_response,
+        debug_mode=debug_mode,
+    )
+    output_record = AiOutputRecord(
+        attempt=_next_ai_output_attempt(section_state),
+        status="received",
+        raw_response=_raw_response_for_storage(
+            raw_response=raw_response,
+            debug_mode=debug_mode,
+        ),
+    )
+    section_state.ai_outputs.append(output_record)
+    return output_record
+
+
+async def _generate_section_variations(
+    section_id: str,
+    section_state: SectionState,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> list[Variation]:
+    template = context.prompt_templates[section_id]
+    last_error: Exception | None = None
+    for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
+        retry_note = section_state.user_note
+        schema_retry_note = _experience_schema_retry_note(last_error, section_id)
+        if schema_retry_note:
+            retry_note = (
+                f"{retry_note}\n\n{schema_retry_note}"
+                if retry_note
+                else schema_retry_note
+            )
+        prompt = build_prompt_text(
+            template=template,
+            company_name=context.company_name,
+            retry_note=retry_note,
+            inline_knowledge=not context.use_role_wide_knowledge_cache,
+            skills_category_count=(
+                context.skills_category_count
+                if section_id == "section_skills_alignment"
+                else None
+            ),
+        )
+        render_prompt(section_id, prompt)
+        try:
+            result = await _request_llm(
+                prompt=prompt,
+                section_id=section_id,
+                context=context,
+                logger=logger,
+            )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(section_id) from exc
+        output_record = _record_ai_output(
+            run_dir=context.run_dir,
+            section_id=section_id,
+            attempt=attempt,
+            raw_response=result.text,
+            section_state=section_state,
+            debug_mode=context.debug_mode,
+        )
+        try:
+            parsed_payload = parse_response_payload(result.text)
+        except ResponseParseError as exc:
+            output_record.status = "parse_error"
+            output_record.error_detail = str(exc)
+            log_failure(
+                logger,
+                category="parse_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+
+        try:
+            payload = parse_response_envelope_payload(
+                result.text,
+                section_id=section_id,
+                skills_category_count=context.skills_category_count,
+            )
+            envelope = ResponseEnvelope.model_validate(payload.normalized_payload)
+        except ResponseSchemaError as exc:
+            output_record.status = "schema_error"
+            output_record.parsed_payload = parsed_payload
+            output_record.error_detail = str(exc)
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+
+        output_record.status = "parsed"
+        output_record.parsed_payload = payload.parsed_payload
+        output_record.normalized_payload = payload.normalized_payload
+
+        if not envelope.variations:
+            last_error = ResponseSchemaError("Envelope contains no variations.")
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail="Envelope contains no variations.",
+            )
+            continue
+        if section_id == COVER_LETTER_SECTION_ID and len(envelope.variations) != 4:
+            last_error = ResponseSchemaError(
+                "Cover letter envelope must contain exactly 4 variations."
+            )
+            log_failure(
+                logger,
+                category="schema_error",
+                node="generate_sections",
+                section_id=section_id,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail="Cover letter envelope must contain exactly 4 variations.",
+            )
+            continue
+        from console_ui import render_variations
+
+        render_variations(section_id, envelope.variations)
+        return envelope.variations
+
+    log_failure(
+        logger,
+        category="generation_error",
+        node="generate_sections",
+        section_id=section_id,
+        retry_count=section_state.retry_count,
+        detail="LLM response failed parsing after allowed retries.",
+    )
+    raise RuntimeError(
+        f"LLM response failed parsing for section '{section_id}'."
+    ) from last_error
+
+
+async def _generate_triage_result(
+    section_state: SectionState, context: RuntimeContext, logger: logging.Logger
+) -> TriageResult:
+    template = context.prompt_templates[TRIAGE_SECTION_ID]
+    prompt = build_prompt_text(
+        template=template,
+        company_name=context.company_name,
+        retry_note=section_state.user_note,
+        inline_knowledge=not context.use_role_wide_knowledge_cache,
+    )
+    render_prompt(TRIAGE_SECTION_ID, prompt)
+
+    last_error: Exception | None = None
+    for attempt in range(MAX_AUTOMATIC_PARSE_RETRIES + 1):
+        try:
+            result = await _request_llm(
+                prompt=prompt,
+                section_id=TRIAGE_SECTION_ID,
+                context=context,
+                logger=logger,
+            )
+        except QuotaExceededError as exc:
+            raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
+
+        output_record = _record_ai_output(
+            run_dir=context.run_dir,
+            section_id=TRIAGE_SECTION_ID,
+            attempt=attempt,
+            raw_response=result.text,
+            section_state=section_state,
+            debug_mode=context.debug_mode,
+        )
+        try:
+            parsed_payload = parse_response_payload(result.text)
+        except ResponseParseError as exc:
+            output_record.status = "parse_error"
+            output_record.error_detail = str(exc)
+            log_failure(
+                logger,
+                category="parse_error",
+                node="triage",
+                section_id=TRIAGE_SECTION_ID,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+
+        try:
+            triage_result = parse_triage_result(result.text)
+        except ResponseSchemaError as exc:
+            output_record.status = "schema_error"
+            output_record.parsed_payload = parsed_payload
+            output_record.error_detail = str(exc)
+            log_failure(
+                logger,
+                category="schema_error",
+                node="triage",
+                section_id=TRIAGE_SECTION_ID,
+                attempt=attempt + 1,
+                retry_count=section_state.retry_count,
+                detail=str(exc),
+            )
+            last_error = exc
+            continue
+
+        output_record.status = "parsed"
+        output_record.parsed_payload = parsed_payload
+        output_record.normalized_payload = {
+            "triage_result": triage_result.model_dump(mode="json")
+        }
+        return triage_result
+
+    raise RuntimeError(
+        "LLM triage response failed parsing after allowed retries."
+    ) from last_error
+
+
+async def node_triage(
+    state: GraphState, context: RuntimeContext, logger: logging.Logger
+) -> GraphState:
+    logger.info("Node triage started.")
+    section_state = state.section_states[TRIAGE_SECTION_ID]
+    triage_result = await _generate_triage_result(section_state, context, logger)
+    render_triage_result(TRIAGE_SECTION_ID, triage_result)
+    selected = Variation(
+        id="TRIAGE",
+        score_0_to_100=triage_result.decision_score_0_to_100,
+        ai_reasoning=triage_result.summary,
+        content_for_template=triage_result.report_markdown,
+    )
+    state.section_states[TRIAGE_SECTION_ID] = SectionState(
+        status="approved",
+        variations=[selected],
+        selected_variation_id=selected.id,
+        selected_content=selected.content_for_template,
+        user_note=section_state.user_note,
+        retry_count=section_state.retry_count,
+        ai_outputs=section_state.ai_outputs,
+    )
+
+    suggested_action = "stop" if triage_result.verdict == "AVOID" else "continue"
+    user_action = suggested_action
+    if context.triage_decision_mode == TRIAGE_DECISION_MODE_ALWAYS_CONTINUE:
+        user_action = "continue"
+        logger.info(
+            "Auto triage decision enabled. mode=%s suggested_action=%s forced_action=%s",
+            context.triage_decision_mode,
+            suggested_action,
+            user_action,
+        )
+    elif context.triage_decision_mode == TRIAGE_DECISION_MODE_FOLLOW_AI:
+        logger.info(
+            "Auto triage decision enabled. mode=%s suggested_action=%s",
+            context.triage_decision_mode,
+            suggested_action,
+        )
+    else:
+        print("")
+        render_triage_decision_prompt(suggested_action=suggested_action)
+        user_action = _prompt_triage_confirmation(suggested_action=suggested_action)
+    logger.info(
+        "Triage decision resolved suggested_action=%s user_action=%s",
+        suggested_action,
+        user_action,
+    )
+
+    if user_action == "stop":
+        logger.info("Triage decision is stop. Ending run at triage_stop.")
+        state.status = "completed"
+        state.current_node = "triage_stop"
+        state.review_queue = []
+    else:
+        state.current_node = "generate_sections"
+        state.status = "running"
+    touch_state(state)
+    return state
+
+
+def _generation_targets(state: GraphState) -> list[str]:
+    targets: list[str] = []
+    for section_id in GENERATION_SECTION_IDS:
+        section_state = state.section_states[section_id]
+        if (
+            section_state.status in {"pending", "retry_requested"}
+            or not section_state.variations
+        ):
+            targets.append(section_id)
+    return targets
+
+
+def _set_generated_section_state(
+    state: GraphState, section_id: str, variations: list[Variation]
+) -> None:
+    section_state = state.section_states[section_id]
+    state.section_states[section_id] = SectionState(
+        status="generated",
+        variations=variations,
+        selected_variation_id=None,
+        selected_content=None,
+        user_note=None,
+        retry_count=section_state.retry_count,
+        ai_outputs=section_state.ai_outputs,
+    )
+
+
+def _generated_review_queue(state: GraphState) -> list[str]:
+    return [
+        section_id
+        for section_id in GENERATION_SECTION_IDS
+        if state.section_states[section_id].status == "generated"
+    ]
+
+
+async def node_generate_sections(
+    state: GraphState,
+    context: RuntimeContext,
+    logger: logging.Logger,
+) -> GraphState:
+    logger.info("Node generate_sections started.")
+    targets = _generation_targets(state)
+
+    if not targets:
+        logger.info("No sections require generation; moving to review.")
+        state.current_node = "review"
+        state.status = "awaiting_review"
+        state.review_queue = _generated_review_queue(state)
+        touch_state(state)
+        return state
+
+    mode = _generation_mode()
+    logger.info(
+        "Generating sections mode=%s count=%s sections=%s",
+        mode,
+        len(targets),
+        ", ".join(targets),
+    )
+    results: list[list[Variation] | Exception] = []
+    if mode == GENERATION_MODE_CONCURRENT:
+        tasks = [
+            _generate_section_variations(
+                section_id, state.section_states[section_id], context, logger
+            )
+            for section_id in targets
+        ]
+        results.extend(await asyncio.gather(*tasks, return_exceptions=True))
+    else:
+        for section_id in targets:
+            try:
+                results.append(
+                    await _generate_section_variations(
+                        section_id, state.section_states[section_id], context, logger
+                    )
+                )
+            except Exception as exc:
+                results.append(exc)
+
+    for index, result in enumerate(results):
+        section_id = targets[index]
+        if isinstance(result, Exception):
+            if isinstance(result, QuotaExceededError):
+                raise result.with_section_id(section_id) from result
+            log_failure(
+                logger,
+                category="generation_error",
+                node="generate_sections",
+                section_id=section_id,
+                retry_count=state.section_states[section_id].retry_count,
+                detail=str(result),
+            )
+            raise RuntimeError(
+                f"Generation failed for section '{section_id}'."
+            ) from result
+
+        _set_generated_section_state(state, section_id, result)
+
+    state.review_queue = targets
+    state.current_node = "review"
+    state.status = "awaiting_review"
+    touch_state(state)
+    return state

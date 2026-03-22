@@ -508,6 +508,32 @@ def _load_existing_run_runtime(args: argparse.Namespace) -> ExistingRunRuntime:
     )
 
 
+def _build_context_for_existing_run(
+    runtime: ExistingRunRuntime,
+    *,
+    invalidate_cache: bool,
+    force_knowledge_reupload: bool,
+) -> RuntimeContext:
+    context = _prepare_runtime_context(
+        run_dir=runtime.run_dir,
+        company_name=runtime.metadata["company_name"],
+        job_description_path=runtime.job_description_path,
+        job_description=runtime.job_description,
+        template_path=runtime.options.template_path,
+        model_name=runtime.options.model_name,
+        input_profile=runtime.input_profile,
+        output_cv_filename=runtime.options.output_cv_filename,
+        debug_mode=runtime.options.debug_mode,
+        skills_category_count=runtime.options.skills_category_count,
+    )
+    _configure_cache_runtime_context(
+        context,
+        invalidate_cache=invalidate_cache,
+        force_knowledge_reupload=force_knowledge_reupload,
+    )
+    return context
+
+
 def _parse_requested_sections(raw_sections: str) -> list[str]:
     value = raw_sections.strip()
     if not value:
@@ -997,20 +1023,8 @@ async def _handle_resume(args: argparse.Namespace) -> None:
     runtime = _load_existing_run_runtime(args)
     _print_status_summary(runtime.state, runtime.run_dir)
     _print_next_steps(runtime.state, runtime.run_dir)
-    context = _prepare_runtime_context(
-        run_dir=runtime.run_dir,
-        company_name=runtime.metadata["company_name"],
-        job_description_path=runtime.job_description_path,
-        job_description=runtime.job_description,
-        template_path=runtime.options.template_path,
-        model_name=runtime.options.model_name,
-        input_profile=runtime.input_profile,
-        output_cv_filename=runtime.options.output_cv_filename,
-        debug_mode=runtime.options.debug_mode,
-        skills_category_count=runtime.options.skills_category_count,
-    )
-    _configure_cache_runtime_context(
-        context,
+    context = _build_context_for_existing_run(
+        runtime,
         invalidate_cache=getattr(args, "invalidate_cache", False),
         force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
@@ -1040,20 +1054,8 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         raise SystemExit(str(exc)) from exc
     _mark_sections_for_regeneration(runtime.state, sections, note)
     save_checkpoint(runtime.checkpoint_path, runtime.state)
-    context = _prepare_runtime_context(
-        run_dir=runtime.run_dir,
-        company_name=runtime.metadata["company_name"],
-        job_description_path=runtime.job_description_path,
-        job_description=runtime.job_description,
-        template_path=runtime.options.template_path,
-        model_name=runtime.options.model_name,
-        input_profile=runtime.input_profile,
-        output_cv_filename=runtime.options.output_cv_filename,
-        debug_mode=runtime.options.debug_mode,
-        skills_category_count=runtime.options.skills_category_count,
-    )
-    _configure_cache_runtime_context(
-        context,
+    context = _build_context_for_existing_run(
+        runtime,
         invalidate_cache=getattr(args, "invalidate_cache", False),
         force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
@@ -1069,20 +1071,8 @@ async def _handle_rebuild_output(args: argparse.Namespace) -> None:
     if not _prepare_rebuild_from_completed_state(runtime.state):
         raise SystemExit("Rebuild aborted: missing approved content.")
     save_checkpoint(runtime.checkpoint_path, runtime.state)
-    context = _prepare_runtime_context(
-        run_dir=runtime.run_dir,
-        company_name=runtime.metadata["company_name"],
-        job_description_path=runtime.job_description_path,
-        job_description=runtime.job_description,
-        template_path=runtime.options.template_path,
-        model_name=runtime.options.model_name,
-        input_profile=runtime.input_profile,
-        output_cv_filename=runtime.options.output_cv_filename,
-        debug_mode=runtime.options.debug_mode,
-        skills_category_count=runtime.options.skills_category_count,
-    )
-    _configure_cache_runtime_context(
-        context,
+    context = _build_context_for_existing_run(
+        runtime,
         invalidate_cache=False,
         force_knowledge_reupload=False,
     )
