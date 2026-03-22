@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
@@ -63,6 +64,27 @@ FORCE_KNOWLEDGE_REUPLOAD_ENV = "ART_FORCE_KNOWLEDGE_REUPLOAD"
 DEFAULT_SKILLS_CATEGORY_COUNT = 4
 RUN_JOB_DESCRIPTION_FILENAME = "job_description.md"
 LEGACY_RUN_JOB_DESCRIPTION_FILENAME = "job_description.txt"
+
+
+@dataclass(frozen=True)
+class CommandOptions:
+    model_name: str
+    output_cv_filename: str
+    template_path: Path
+    debug_mode: bool
+    skills_category_count: int
+
+
+@dataclass(frozen=True)
+class ExistingRunRuntime:
+    run_dir: Path
+    checkpoint_path: Path
+    state: GraphState
+    metadata: dict[str, str]
+    input_profile: str
+    job_description_path: Path
+    job_description: str
+    options: CommandOptions
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -360,6 +382,39 @@ def _load_metadata_or_default(
     return metadata
 
 
+def _resolve_command_options(
+    *,
+    metadata: dict[str, str],
+    input_profile: str,
+    explicit_model: str | None,
+    explicit_template: Path | None,
+    explicit_skills_category_count: int | None,
+    force_debug_mode: bool,
+) -> CommandOptions:
+    debug_mode = metadata.get("debug_mode", "false") == "true"
+    if force_debug_mode:
+        debug_mode = True
+    return CommandOptions(
+        model_name=resolve_gemini_model_name(
+            explicit_model,
+            metadata_model=metadata.get("model_name"),
+        ),
+        output_cv_filename=resolve_output_cv_filename(
+            metadata_filename=metadata.get("output_cv_filename")
+        ),
+        template_path=_resolve_template_path(
+            explicit_template,
+            metadata_template=metadata.get("template_path"),
+            input_profile=input_profile,
+        ),
+        debug_mode=debug_mode,
+        skills_category_count=_resolve_skills_category_count(
+            explicit_skills_category_count,
+            metadata_count=metadata.get("skills_category_count"),
+        ),
+    )
+
+
 def _metadata_input_profile(metadata: dict[str, str]) -> str | None:
     input_profile = metadata.get("input_profile")
     if input_profile:
@@ -421,6 +476,36 @@ def _resolve_run_checkpoint_pair(args: argparse.Namespace) -> tuple[Path, Path]:
     if run_path:
         return run_path, run_path / "state_checkpoint.json"
     raise ValueError("Expected run-path or checkpoint-path.")
+
+
+def _load_existing_run_runtime(args: argparse.Namespace) -> ExistingRunRuntime:
+    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
+    state = load_checkpoint(checkpoint_path)
+    metadata = load_run_metadata(run_dir)
+    input_profile = _resolve_input_profile_for_command(
+        getattr(args, "input_profile", None),
+        metadata_input_profile=_metadata_input_profile(metadata),
+    )
+    os.environ[INPUT_PROFILE_ENV] = input_profile
+    job_description_path, job_description = _load_existing_run_job_description(run_dir)
+    options = _resolve_command_options(
+        metadata=metadata,
+        input_profile=input_profile,
+        explicit_model=getattr(args, "model", None),
+        explicit_template=None,
+        explicit_skills_category_count=getattr(args, "skills_category_count", None),
+        force_debug_mode=False,
+    )
+    return ExistingRunRuntime(
+        run_dir=run_dir,
+        checkpoint_path=checkpoint_path,
+        state=state,
+        metadata=metadata,
+        input_profile=input_profile,
+        job_description_path=job_description_path,
+        job_description=job_description,
+        options=options,
+    )
 
 
 def _parse_requested_sections(raw_sections: str) -> list[str]:
@@ -730,6 +815,12 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
     return state
 
 
+async def _run_graph_and_report(state: GraphState, context: RuntimeContext) -> None:
+    final_state = await _run_graph(state, context)
+    _print_status_summary(final_state, context.run_dir)
+    _print_next_steps(final_state, context.run_dir)
+
+
 def _prepare_runtime_context(
     *,
     run_dir: Path,
@@ -854,38 +945,25 @@ async def _handle_run(args: argparse.Namespace) -> None:
     )
     os.environ[INPUT_PROFILE_ENV] = input_profile
     jd_path, jd_text = _persist_run_job_description(run_dir, args.jd_path)
-
-    model_name = resolve_gemini_model_name(
-        args.model,
-        metadata_model=metadata.get("model_name"),
-    )
-    output_cv_filename = resolve_output_cv_filename(
-        metadata_filename=metadata.get("output_cv_filename")
-    )
-    template_path = _resolve_template_path(
-        args.template_path,
-        metadata_template=metadata.get("template_path"),
+    options = _resolve_command_options(
+        metadata=metadata,
         input_profile=input_profile,
-    )
-    debug_mode = metadata.get("debug_mode", "false") == "true"
-    if args.debug:
-        debug_mode = True
-
-    skills_category_count = _resolve_skills_category_count(
-        getattr(args, "skills_category_count", None),
-        metadata_count=metadata.get("skills_category_count"),
+        explicit_model=args.model,
+        explicit_template=args.template_path,
+        explicit_skills_category_count=getattr(args, "skills_category_count", None),
+        force_debug_mode=bool(args.debug),
     )
     context = _prepare_runtime_context(
         run_dir=run_dir,
         company_name=metadata.get("company_name", args.company),
         job_description_path=jd_path,
         job_description=jd_text,
-        template_path=template_path,
-        model_name=model_name,
+        template_path=options.template_path,
+        model_name=options.model_name,
         input_profile=input_profile,
-        output_cv_filename=output_cv_filename,
-        debug_mode=debug_mode,
-        skills_category_count=skills_category_count,
+        output_cv_filename=options.output_cv_filename,
+        debug_mode=options.debug_mode,
+        skills_category_count=options.skills_category_count,
     )
     _configure_cache_runtime_context(
         context,
@@ -900,71 +978,43 @@ async def _handle_run(args: argparse.Namespace) -> None:
             "company_name": metadata.get("company_name", args.company),
             "job_title": metadata.get("job_title", getattr(args, "job_title", None))
             or "",
-            "template_path": str(template_path),
-            "model_name": model_name,
+            "template_path": str(options.template_path),
+            "model_name": options.model_name,
             "input_profile": input_profile,
-            "output_cv_filename": output_cv_filename,
-            "debug_mode": str(debug_mode).lower(),
-            "skills_category_count": str(skills_category_count),
+            "output_cv_filename": options.output_cv_filename,
+            "debug_mode": str(options.debug_mode).lower(),
+            "skills_category_count": str(options.skills_category_count),
         },
     )
     print(f"Using run folder: {run_dir}")
-    print(f"Model: {model_name}")
+    print(f"Model: {options.model_name}")
     print(f"Input profile: {input_profile}")
     print(f"JD preview: {_job_description_preview(jd_text, max_lines=3)}")
-    final_state = await _run_graph(state, context)
-    _print_status_summary(final_state, run_dir)
-    _print_next_steps(final_state, run_dir)
+    await _run_graph_and_report(state, context)
 
 
 async def _handle_resume(args: argparse.Namespace) -> None:
-    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
-
-    state = load_checkpoint(checkpoint_path)
-    metadata = load_run_metadata(run_dir)
-    input_profile = _resolve_input_profile_for_command(
-        getattr(args, "input_profile", None),
-        metadata_input_profile=_metadata_input_profile(metadata),
-    )
-    os.environ[INPUT_PROFILE_ENV] = input_profile
-    jd_path, jd_text = _load_existing_run_job_description(run_dir)
-    _print_status_summary(state, run_dir)
-    _print_next_steps(state, run_dir)
-
-    model_name = resolve_gemini_model_name(
-        args.model,
-        metadata_model=metadata.get("model_name"),
-    )
-    output_cv_filename = resolve_output_cv_filename(
-        metadata_filename=metadata.get("output_cv_filename")
-    )
+    runtime = _load_existing_run_runtime(args)
+    _print_status_summary(runtime.state, runtime.run_dir)
+    _print_next_steps(runtime.state, runtime.run_dir)
     context = _prepare_runtime_context(
-        run_dir=run_dir,
-        company_name=metadata["company_name"],
-        job_description_path=jd_path,
-        job_description=jd_text,
-        template_path=_resolve_template_path(
-            explicit_template=None,
-            metadata_template=metadata.get("template_path"),
-            input_profile=input_profile,
-        ),
-        model_name=model_name,
-        input_profile=input_profile,
-        output_cv_filename=output_cv_filename,
-        debug_mode=metadata.get("debug_mode", "false") == "true",
-        skills_category_count=_resolve_skills_category_count(
-            getattr(args, "skills_category_count", None),
-            metadata_count=metadata.get("skills_category_count"),
-        ),
+        run_dir=runtime.run_dir,
+        company_name=runtime.metadata["company_name"],
+        job_description_path=runtime.job_description_path,
+        job_description=runtime.job_description,
+        template_path=runtime.options.template_path,
+        model_name=runtime.options.model_name,
+        input_profile=runtime.input_profile,
+        output_cv_filename=runtime.options.output_cv_filename,
+        debug_mode=runtime.options.debug_mode,
+        skills_category_count=runtime.options.skills_category_count,
     )
     _configure_cache_runtime_context(
         context,
         invalidate_cache=getattr(args, "invalidate_cache", False),
         force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
-    final_state = await _run_graph(state, context)
-    _print_status_summary(final_state, run_dir)
-    _print_next_steps(final_state, run_dir)
+    await _run_graph_and_report(runtime.state, context)
 
 
 def _handle_status(args: argparse.Namespace) -> None:
@@ -975,19 +1025,11 @@ def _handle_status(args: argparse.Namespace) -> None:
 
 
 async def _handle_regenerate(args: argparse.Namespace) -> None:
-    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
-    state = load_checkpoint(checkpoint_path)
+    runtime = _load_existing_run_runtime(args)
     try:
-        _ensure_regenerate_allowed(state)
+        _ensure_regenerate_allowed(runtime.state)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    metadata = load_run_metadata(run_dir)
-    input_profile = _resolve_input_profile_for_command(
-        getattr(args, "input_profile", None),
-        metadata_input_profile=_metadata_input_profile(metadata),
-    )
-    os.environ[INPUT_PROFILE_ENV] = input_profile
-    jd_path, jd_text = _load_existing_run_job_description(run_dir)
     try:
         sections = _parse_requested_sections(args.sections)
     except ValueError as exc:
@@ -996,95 +1038,55 @@ async def _handle_regenerate(args: argparse.Namespace) -> None:
         note = _normalize_regeneration_note(args.note)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    _mark_sections_for_regeneration(state, sections, note)
-    save_checkpoint(checkpoint_path, state)
-
-    model_name = resolve_gemini_model_name(
-        args.model,
-        metadata_model=metadata.get("model_name"),
-    )
-    output_cv_filename = resolve_output_cv_filename(
-        metadata_filename=metadata.get("output_cv_filename")
-    )
+    _mark_sections_for_regeneration(runtime.state, sections, note)
+    save_checkpoint(runtime.checkpoint_path, runtime.state)
     context = _prepare_runtime_context(
-        run_dir=run_dir,
-        company_name=metadata["company_name"],
-        job_description_path=jd_path,
-        job_description=jd_text,
-        template_path=_resolve_template_path(
-            explicit_template=None,
-            metadata_template=metadata.get("template_path"),
-            input_profile=input_profile,
-        ),
-        model_name=model_name,
-        input_profile=input_profile,
-        output_cv_filename=output_cv_filename,
-        debug_mode=metadata.get("debug_mode", "false") == "true",
-        skills_category_count=_resolve_skills_category_count(
-            getattr(args, "skills_category_count", None),
-            metadata_count=metadata.get("skills_category_count"),
-        ),
+        run_dir=runtime.run_dir,
+        company_name=runtime.metadata["company_name"],
+        job_description_path=runtime.job_description_path,
+        job_description=runtime.job_description,
+        template_path=runtime.options.template_path,
+        model_name=runtime.options.model_name,
+        input_profile=runtime.input_profile,
+        output_cv_filename=runtime.options.output_cv_filename,
+        debug_mode=runtime.options.debug_mode,
+        skills_category_count=runtime.options.skills_category_count,
     )
     _configure_cache_runtime_context(
         context,
         invalidate_cache=getattr(args, "invalidate_cache", False),
         force_knowledge_reupload=getattr(args, "force_knowledge_reupload", False),
     )
-    final_state = await _run_graph(state, context)
-    _print_status_summary(final_state, run_dir)
-    _print_next_steps(final_state, run_dir)
+    await _run_graph_and_report(runtime.state, context)
 
 
 async def _handle_rebuild_output(args: argparse.Namespace) -> None:
-    run_dir, checkpoint_path = _resolve_run_checkpoint_pair(args)
-    state = load_checkpoint(checkpoint_path)
+    runtime = _load_existing_run_runtime(args)
     try:
-        _ensure_rebuild_allowed(state)
+        _ensure_rebuild_allowed(runtime.state)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
-    if not _prepare_rebuild_from_completed_state(state):
+    if not _prepare_rebuild_from_completed_state(runtime.state):
         raise SystemExit("Rebuild aborted: missing approved content.")
-    save_checkpoint(checkpoint_path, state)
-
-    metadata = load_run_metadata(run_dir)
-    input_profile = _resolve_input_profile_for_command(
-        getattr(args, "input_profile", None),
-        metadata_input_profile=_metadata_input_profile(metadata),
-    )
-    os.environ[INPUT_PROFILE_ENV] = input_profile
-    jd_path, jd_text = _load_existing_run_job_description(run_dir)
+    save_checkpoint(runtime.checkpoint_path, runtime.state)
     context = _prepare_runtime_context(
-        run_dir=run_dir,
-        company_name=metadata["company_name"],
-        job_description_path=jd_path,
-        job_description=jd_text,
-        template_path=_resolve_template_path(
-            explicit_template=None,
-            metadata_template=metadata.get("template_path"),
-            input_profile=input_profile,
-        ),
-        model_name=resolve_gemini_model_name(
-            explicit_model=None,
-            metadata_model=metadata.get("model_name"),
-        ),
-        input_profile=input_profile,
-        output_cv_filename=resolve_output_cv_filename(
-            metadata_filename=metadata.get("output_cv_filename")
-        ),
-        debug_mode=metadata.get("debug_mode", "false") == "true",
-        skills_category_count=_resolve_skills_category_count(
-            explicit_count=None,
-            metadata_count=metadata.get("skills_category_count"),
-        ),
+        run_dir=runtime.run_dir,
+        company_name=runtime.metadata["company_name"],
+        job_description_path=runtime.job_description_path,
+        job_description=runtime.job_description,
+        template_path=runtime.options.template_path,
+        model_name=runtime.options.model_name,
+        input_profile=runtime.input_profile,
+        output_cv_filename=runtime.options.output_cv_filename,
+        debug_mode=runtime.options.debug_mode,
+        skills_category_count=runtime.options.skills_category_count,
     )
     _configure_cache_runtime_context(
         context,
         invalidate_cache=False,
         force_knowledge_reupload=False,
     )
-    final_state = await _run_graph(state, context)
-    _print_status_summary(final_state, run_dir)
-    _print_next_steps(final_state, run_dir)
+    await _run_graph_and_report(runtime.state, context)
 
 
 def main() -> None:

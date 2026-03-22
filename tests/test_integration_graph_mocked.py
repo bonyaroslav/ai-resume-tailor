@@ -21,6 +21,8 @@ from workflow_definition import (
     WORKFLOW_SECTION_IDS,
 )
 
+NON_DEBUG_RAW_RESPONSE = "[omitted_non_debug]"
+
 
 def _make_template(path: Path) -> None:
     document = Document()
@@ -307,9 +309,16 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     checkpoint_state = load_checkpoint(context.checkpoint_path)
     assert checkpoint_state.status == "completed"
     assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs
+    assert (
+        checkpoint_state.section_states["section_skills_alignment"]
+        .ai_outputs[0]
+        .raw_response
+        == NON_DEBUG_RAW_RESPONSE
+    )
     assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs[
         0
     ].parsed_payload["meta"]["covered_keywords"] == ["python", "sql"]
+    assert not (run_dir / "responses").exists()
 
     rendered = Document(str(context.output_cv_path))
     output_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
@@ -328,6 +337,60 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert "## Variation A" in cover_letters
     audit_text = context.output_audit_path.read_text(encoding="utf-8")
     assert "# Deep Dive CV Audit" in audit_text
+
+
+def test_run_graph_debug_mode_persists_raw_responses(monkeypatch: object) -> None:
+    run_dir = make_workspace_temp_dir("integration-mocked-graph-debug")
+    template_path = run_dir / "template.docx"
+    _make_template(template_path)
+    context = _build_runtime_context(run_dir, template_path)
+    context.debug_mode = True
+    state: GraphState = create_initial_state("integration-run-debug")
+
+    async def fake_generate_with_gemini(
+        prompt: str,
+        api_key: str,
+        model: str,
+        section_id: str | None = None,
+        cached_content_name: str | None = None,
+        skills_category_count: int = 4,
+    ) -> LlmGenerationResult:
+        assert api_key == "test-key"
+        assert model == "fake-model"
+        assert cached_content_name is None
+        assert skills_category_count == 4
+        resolved_section_id = section_id or _extract_section_id_from_prompt(prompt)
+        return _result(_fake_response_for_section(resolved_section_id))
+
+    review_inputs = ["continue"]
+    for _ in GENERATION_SECTION_IDS:
+        review_inputs.extend(["choose", "A"])
+    response_iter = iter(review_inputs)
+
+    def fake_input(_: str = "") -> str:
+        try:
+            return next(response_iter)
+        except StopIteration as exc:
+            raise AssertionError("Review requested more inputs than expected.") from exc
+
+    monkeypatch.setattr(graph_nodes, "generate_with_gemini", fake_generate_with_gemini)
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    final_state = asyncio.run(_run_graph(state, context))
+
+    assert final_state.status == "completed"
+    responses_dir = run_dir / "responses"
+    assert responses_dir.exists()
+    assert any(responses_dir.iterdir())
+
+    checkpoint_state = load_checkpoint(context.checkpoint_path)
+    assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs
+    assert (
+        checkpoint_state.section_states["section_skills_alignment"]
+        .ai_outputs[0]
+        .raw_response
+        != NON_DEBUG_RAW_RESPONSE
+    )
 
 
 def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -> None:

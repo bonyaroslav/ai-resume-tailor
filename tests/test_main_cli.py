@@ -9,12 +9,14 @@ from graph_state import GraphState, SectionState, Variation, create_initial_stat
 from main import (
     _configure_cache_runtime_context,
     _ensure_regenerate_allowed,
+    _load_existing_run_job_description,
     _mark_sections_for_regeneration,
     _normalize_regeneration_note,
     _parse_requested_sections,
     _resolve_run_checkpoint_pair,
     _selected_variation_score,
 )
+from tests.test_support import make_workspace_temp_dir
 
 
 def test_parse_requested_sections_all() -> None:
@@ -176,3 +178,15 @@ def test_configure_cache_runtime_context_prefers_explicit_force_flag() -> None:
 
     assert context.invalidate_role_wide_knowledge_cache is True
     assert context.force_knowledge_reupload is True
+
+
+def test_load_existing_run_job_description_migrates_legacy_file() -> None:
+    run_dir = make_workspace_temp_dir("legacy-jd-load")
+    legacy_path = run_dir / "job_description.txt"
+    legacy_path.write_text("Legacy job description", encoding="utf-8")
+
+    jd_path, jd_text = _load_existing_run_job_description(run_dir)
+
+    assert jd_path == run_dir / "job_description.md"
+    assert jd_text == "Legacy job description"
+    assert jd_path.read_text(encoding="utf-8") == "Legacy job description"

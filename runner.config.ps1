@@ -58,11 +58,11 @@ $RunnerConfig = @{
     # Force a fresh run cache for the current run instead of reusing an existing one.
     # Turn ON when resuming or regenerating after changing knowledge files for the same run.
     # Example: you edited role_engineer knowledge and now run `resume` for an old run.
-    InvalidateRoleWideKnowledgeCache = $false
+    InvalidateRoleWideKnowledgeCache = $true
     # Re-upload all knowledge files even if unchanged copies already exist in the local cache registry.
     # Turn ON only for a full cache reset or when uploaded file reuse looks wrong.
     # Example: you switched from role_engineer to role_manager and want a completely clean re-upload.
-    ForceKnowledgeReupload = $true
+    ForceKnowledgeReupload = $false
     # Fail fast if Gemini says the cache was not actually used.
     # Keep this ON unless you are debugging cache behavior.
     # Example: leave ON to catch cases where cached content exists but requests still send full tokens.

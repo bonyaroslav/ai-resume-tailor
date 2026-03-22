@@ -67,6 +67,7 @@ TRIAGE_DECISION_MODES = {
     TRIAGE_DECISION_MODE_FOLLOW_AI,
     TRIAGE_DECISION_MODE_ALWAYS_CONTINUE,
 }
+NON_DEBUG_RAW_RESPONSE = "[omitted_non_debug]"
 
 _LAST_LLM_REQUEST_STARTED_AT: float | None = None
 _LLM_PACING_LOCK: asyncio.Lock | None = None
@@ -330,6 +331,56 @@ def _next_ai_output_attempt(section_state: SectionState) -> int:
     return len(section_state.ai_outputs) + 1
 
 
+def _raw_response_for_storage(*, raw_response: str, debug_mode: bool) -> str:
+    if debug_mode:
+        return raw_response
+    return NON_DEBUG_RAW_RESPONSE
+
+
+def _persist_raw_response_artifact(
+    run_dir: Path,
+    *,
+    section_id: str,
+    attempt: int,
+    raw_response: str,
+    debug_mode: bool,
+) -> None:
+    if not debug_mode:
+        return
+    responses_dir = run_dir / "responses"
+    responses_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{section_id}.attempt_{attempt + 1}.raw_response.txt"
+    (responses_dir / filename).write_text(raw_response, encoding="utf-8")
+
+
+def _record_ai_output(
+    *,
+    run_dir: Path,
+    section_id: str,
+    attempt: int,
+    raw_response: str,
+    section_state: SectionState,
+    debug_mode: bool,
+) -> AiOutputRecord:
+    _persist_raw_response_artifact(
+        run_dir,
+        section_id=section_id,
+        attempt=attempt,
+        raw_response=raw_response,
+        debug_mode=debug_mode,
+    )
+    output_record = AiOutputRecord(
+        attempt=_next_ai_output_attempt(section_state),
+        status="received",
+        raw_response=_raw_response_for_storage(
+            raw_response=raw_response,
+            debug_mode=debug_mode,
+        ),
+    )
+    section_state.ai_outputs.append(output_record)
+    return output_record
+
+
 async def _generate_section_variations(
     section_id: str,
     section_state: SectionState,
@@ -368,8 +419,14 @@ async def _generate_section_variations(
             )
         except QuotaExceededError as exc:
             raise exc.with_section_id(section_id) from exc
-        _write_raw_response(context.run_dir, section_id, attempt, result.text)
-        output_record = _append_ai_output_record(section_state, result.text)
+        output_record = _record_ai_output(
+            run_dir=context.run_dir,
+            section_id=section_id,
+            attempt=attempt,
+            raw_response=result.text,
+            section_state=section_state,
+            debug_mode=context.debug_mode,
+        )
         try:
             parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
@@ -456,27 +513,6 @@ async def _generate_section_variations(
     ) from last_error
 
 
-def _write_raw_response(
-    run_dir: Path, section_id: str, attempt: int, raw_response: str
-) -> None:
-    responses_dir = run_dir / "responses"
-    responses_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{section_id}.attempt_{attempt + 1}.raw_response.txt"
-    (responses_dir / filename).write_text(raw_response, encoding="utf-8")
-
-
-def _append_ai_output_record(
-    section_state: SectionState, raw_response: str
-) -> AiOutputRecord:
-    output_record = AiOutputRecord(
-        attempt=_next_ai_output_attempt(section_state),
-        status="received",
-        raw_response=raw_response,
-    )
-    section_state.ai_outputs.append(output_record)
-    return output_record
-
-
 def _normalize_audit_markdown(markdown: str) -> str:
     normalized = markdown.strip()
     if not normalized:
@@ -508,8 +544,14 @@ async def _generate_triage_result(
         except QuotaExceededError as exc:
             raise exc.with_section_id(TRIAGE_SECTION_ID) from exc
 
-        _write_raw_response(context.run_dir, TRIAGE_SECTION_ID, attempt, result.text)
-        output_record = _append_ai_output_record(section_state, result.text)
+        output_record = _record_ai_output(
+            run_dir=context.run_dir,
+            section_id=TRIAGE_SECTION_ID,
+            attempt=attempt,
+            raw_response=result.text,
+            section_state=section_state,
+            debug_mode=context.debug_mode,
+        )
         try:
             parsed_payload = parse_response_payload(result.text)
         except ResponseParseError as exc:
@@ -1027,8 +1069,14 @@ async def node_audit(
         context=context,
         logger=logger,
     )
-    _write_raw_response(context.run_dir, AUDIT_SECTION_ID, 0, result.text)
-    output_record = _append_ai_output_record(section_state, result.text)
+    output_record = _record_ai_output(
+        run_dir=context.run_dir,
+        section_id=AUDIT_SECTION_ID,
+        attempt=0,
+        raw_response=result.text,
+        section_state=section_state,
+        debug_mode=context.debug_mode,
+    )
     audit_markdown = _normalize_audit_markdown(result.text)
     output_record.status = "parsed"
     section_state.variations = []
