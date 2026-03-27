@@ -16,6 +16,44 @@ function Resolve-FromRoot {
     return [System.IO.Path]::GetFullPath((Join-Path $BasePath $InputPath))
 }
 
+function Sanitize-FilenamePart {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+    )
+
+    $trimmedValue = $Value.Trim()
+    if ([string]::IsNullOrWhiteSpace($trimmedValue)) {
+        return ""
+    }
+
+    $sanitizedValue = [System.Text.RegularExpressions.Regex]::Replace($trimmedValue, '[<>:"/\\|?*]', '_')
+    return $sanitizedValue.TrimEnd(@(' ', '.'))
+}
+
+function Resolve-OutputCvFileName {
+    param(
+        [string]$ConfiguredOutputCvFileName,
+        [Parameter(Mandatory = $true)][string]$CompanyName,
+        [string]$JobTitle
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ConfiguredOutputCvFileName)) {
+        return $ConfiguredOutputCvFileName.Trim()
+    }
+
+    $sanitizedCompanyName = Sanitize-FilenamePart -Value $CompanyName
+    if ([string]::IsNullOrWhiteSpace($sanitizedCompanyName)) {
+        throw "Derived OutputCvFileName is empty after sanitizing CompanyName."
+    }
+
+    $sanitizedJobTitle = Sanitize-FilenamePart -Value $JobTitle
+    if ([string]::IsNullOrWhiteSpace($sanitizedJobTitle)) {
+        return "$sanitizedCompanyName.docx"
+    }
+
+    return "$sanitizedCompanyName - $sanitizedJobTitle.docx"
+}
+
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     throw "Config file not found: $ConfigPath"
 }
@@ -66,6 +104,10 @@ if (-not (Test-Path -LiteralPath $jdPath)) {
 }
 if ([string]::IsNullOrWhiteSpace($companyName)) {
     throw "CompanyName must not be empty in runner.config.ps1"
+}
+if ([string]::IsNullOrWhiteSpace($outputCvFileName)) {
+    $outputCvFileName = Resolve-OutputCvFileName -ConfiguredOutputCvFileName $outputCvFileName -CompanyName $companyName -JobTitle $jobTitle
+    Write-Host "OutputCvFileName is empty in runner.config.ps1; defaulting to $outputCvFileName"
 }
 if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
     $outputCvFileName = $outputCvFileName.Trim()

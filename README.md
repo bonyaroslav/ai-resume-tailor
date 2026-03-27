@@ -313,12 +313,14 @@ If you do not want to type API key / JD path / company each run:
 
 1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
 2. Put your key inside `secrets\gemini_api_key.txt` (gitignored).
-3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `JobTitle`, optional `ModelName`).
+3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `JobTitle`, optional `OutputCvFileName`, optional `ModelName`).
 4. Run:
 
 ```powershell
 .\run_local.ps1
 ```
+
+If `OutputCvFileName` is empty, the runner derives it automatically as `CompanyName - JobTitle.docx` or `CompanyName.docx` when `JobTitle` is blank.
 
 ### Offline Smoke Run (No Network)
 
@@ -428,6 +430,5 @@ Knowledge files and run artifacts stay in repo-local directories. During live ge
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
 
 

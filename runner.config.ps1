@@ -6,15 +6,16 @@ $RunnerConfig = @{
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Algoteque hub.md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Confidential Careers.md"
     ##2 UPDATE before run
-    CompanyName = "Algoteque"
+    CompanyName = "Confidential Careers"
     ##3 UPDATE before run
-    JobTitle = "Full-stack Developer (.NET/C#) - Windows Forms"
-    ##4 UPDATE before run
-    OutputCvFileName = "Algoteque - Software Engineer - YB.docx"
+    JobTitle = "Senior Software Engineer"
+    ##4 UPDATE before run (optional)
+    # Leave empty to derive "<CompanyName> - <JobTitle>.docx" or "<CompanyName>.docx"
+    OutputCvFileName = ""
     ##5 UPDATE before run
-    TierName = "freetier"
+    TierName = "model_flash"
     ##6 UPDATE before run
     InputProfile = "role_engineer"
 
@@ -51,7 +52,7 @@ $RunnerConfig = @{
 
     # Optional
     TemplatePath = ""
-    Debug = $false
+    Debug = $true
     RunHealthCheck = $true
     # Reuse uploaded knowledge and Gemini cached content when possible.
     # Keep this ON for normal use.
@@ -64,7 +65,7 @@ $RunnerConfig = @{
     # Re-upload all knowledge files even if unchanged copies already exist in the local cache registry.
     # Turn ON only for a full cache reset or when uploaded file reuse looks wrong.
     # Example: you switched from role_engineer to role_manager and want a completely clean re-upload.
-    ForceKnowledgeReupload = $true
+    ForceKnowledgeReupload = $false
     # Fail fast if Gemini says the cache was not actually used.
     # Keep this ON unless you are debugging cache behavior.
     # Example: leave ON to catch cases where cached content exists but requests still send full tokens.

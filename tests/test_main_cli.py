@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ from main import (
     _selected_variation_score,
 )
 from tests.test_support import make_workspace_temp_dir
+from settings import DEFAULT_OUTPUT_CV_FILENAME, resolve_output_cv_filename
 
 
 def test_parse_requested_sections_all() -> None:
@@ -190,3 +193,144 @@ def test_load_existing_run_job_description_migrates_legacy_file() -> None:
     assert jd_path == run_dir / "job_description.md"
     assert jd_text == "Legacy job description"
     assert jd_path.read_text(encoding="utf-8") == "Legacy job description"
+
+
+RUN_LOCAL_SCRIPT = Path("run_local.ps1").resolve()
+
+
+def _ps_string_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _write_fake_runner_project(tmp_dir: Path) -> tuple[Path, Path]:
+    project_root = tmp_dir / "runner-project"
+    project_root.mkdir(parents=True, exist_ok=False)
+    log_path = project_root / "fake_python.log"
+
+    fake_python_path = project_root / "fake_python.cmd"
+    fake_python_path.write_text(
+        "@echo off\n"
+        'echo CALL:%*>>"%FAKE_PYTHON_LOG%"\n'
+        'echo ART_OUTPUT_CV_FILENAME=%ART_OUTPUT_CV_FILENAME%>>"%FAKE_PYTHON_LOG%"\n'
+        "exit /b 0\n",
+        encoding="utf-8",
+    )
+
+    (project_root / "requirements.txt").write_text("", encoding="utf-8")
+    (project_root / "main.py").write_text("print('stub')\n", encoding="utf-8")
+    (project_root / "jd.md").write_text("Example JD\n", encoding="utf-8")
+    secrets_dir = project_root / "secrets"
+    secrets_dir.mkdir(parents=True, exist_ok=False)
+    (secrets_dir / "gemini_api_key.txt").write_text("fake-key\n", encoding="utf-8")
+
+    return project_root, log_path
+
+
+def _write_runner_config(
+    config_path: Path,
+    *,
+    project_root: Path,
+    company_name: str,
+    job_title: str,
+    output_cv_file_name: str,
+) -> None:
+    config_path.write_text(
+        "\n".join(
+            [
+                "$RunnerConfig = @{",
+                f"    ProjectRoot = {_ps_string_literal(str(project_root))}",
+                "    PythonExe = '.\\fake_python.cmd'",
+                "    RequirementsFile = 'requirements.txt'",
+                "    ApiKeyFile = '.\\secrets\\gemini_api_key.txt'",
+                "    JobDescriptionPath = '.\\jd.md'",
+                f"    CompanyName = {_ps_string_literal(company_name)}",
+                f"    JobTitle = {_ps_string_literal(job_title)}",
+                f"    OutputCvFileName = {_ps_string_literal(output_cv_file_name)}",
+                "    TierName = 'test_tier'",
+                "    InputProfile = 'role_engineer'",
+                "    ModelName = ''",
+                "    TierProfiles = @{",
+                "        test_tier = @{",
+                "            ModelName = 'gemini-2.5-flash'",
+                "            GenerationMode = 'sequential'",
+                "            MinIntervalSeconds = '0'",
+                "            Max429Attempts = '1'",
+                "            BackoffBaseSeconds = '1'",
+                "        }",
+                "    }",
+                "    TemplatePath = ''",
+                "    Debug = $false",
+                "    RunHealthCheck = $false",
+                "    UseRoleWideKnowledgeCache = $false",
+                "    InvalidateRoleWideKnowledgeCache = $false",
+                "    ForceKnowledgeReupload = $false",
+                "    RequireCachedTokenConfirmation = $false",
+                "    TriageDecisionMode = 'always_continue'",
+                "    KnowledgeCacheTtlSeconds = 3600",
+                "    KnowledgeCacheRegistryPath = '.\\runs\\_cache\\role_wide_knowledge_cache_registry.json'",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    ("output_cv_file_name", "company_name", "job_title", "expected_filename"),
+    [
+        ("custom.docx", "Acme", "Senior Engineer", "custom.docx"),
+        ("custom", "Acme", "Senior Engineer", "custom.docx"),
+        ("", "Acme", "Senior Engineer", "Acme - Senior Engineer.docx"),
+        ("", "Acme", "", "Acme.docx"),
+        ("", "Acme: Corp", "C#/.NET Lead.", "Acme_ Corp - C#_.NET Lead.docx"),
+    ],
+)
+def test_run_local_resolves_output_cv_filename(
+    output_cv_file_name: str,
+    company_name: str,
+    job_title: str,
+    expected_filename: str,
+) -> None:
+    tmp_dir = make_workspace_temp_dir("run-local-ps1")
+    project_root, log_path = _write_fake_runner_project(tmp_dir)
+    config_path = tmp_dir / "runner.config.ps1"
+    _write_runner_config(
+        config_path,
+        project_root=project_root,
+        company_name=company_name,
+        job_title=job_title,
+        output_cv_file_name=output_cv_file_name,
+    )
+
+    env = os.environ.copy()
+    env["FAKE_PYTHON_LOG"] = str(log_path.resolve())
+
+    completed = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(RUN_LOCAL_SCRIPT),
+            "-ConfigPath",
+            str(config_path),
+        ],
+        cwd=Path.cwd(),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    log_text = log_path.read_text(encoding="utf-8")
+    assert f"ART_OUTPUT_CV_FILENAME={expected_filename}" in log_text
+
+
+def test_direct_python_flow_keeps_default_output_filename(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
+    assert resolve_output_cv_filename() == DEFAULT_OUTPUT_CV_FILENAME
