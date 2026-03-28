@@ -69,7 +69,7 @@ Use the built-in runner so you do not re-enter API key, company, or JD path ever
 
 1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
 2. Put your real Gemini API key in `secrets\gemini_api_key.txt` (this path is gitignored).
-3. Edit `runner.config.ps1` once:
+3. Edit `tools\RUNNER.config.ps1` once:
    - `JobDescriptionPath`
    - `CompanyName`
    - `JobTitle` (optional, for separate run folders per vacancy)
@@ -77,7 +77,7 @@ Use the built-in runner so you do not re-enter API key, company, or JD path ever
 4. Run:
 
 ```powershell
-.\run_local.ps1
+.\tools\run_local.ps1
 ```
 
 This executes: project cd, dependency install, API key load from file, optional Gemini health check, and `main.py run`.
@@ -86,7 +86,7 @@ This executes: project cd, dependency install, API key load from file, optional 
 
 You can choose model in your local app, not only in Google AI Studio:
 
-- `runner.config.ps1` -> `ModelName`
+- `tools\RUNNER.config.ps1` -> `ModelName`
 - CLI -> `--model`
 - env var -> `$env:GEMINI_MODEL="..."`
 - code default -> `DEFAULT_MODEL` in `main.py`
@@ -177,5 +177,6 @@ $env:ART_UI_SCORE_STYLE="bold bright_magenta"
 - Billing model (free vs paid): https://ai.google.dev/gemini-api/docs/billing/
 - Pricing and model availability: https://ai.google.dev/pricing
 - Regional availability: https://ai.google.dev/gemini-api/docs/available-regions
+
 
 

@@ -1,16 +1,16 @@
 $RunnerConfig = @{
-    # Update these once, then run .\run_local.ps1
+    # Update these once, then run .\tools\run_local.ps1
     ProjectRoot = "C:\Projects\ai-resume-tailor"
     PythonExe = ".\.venv\Scripts\python.exe"
     RequirementsFile = "requirements.txt"
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Confidential Careers.md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Sigma Healthcare (1).md"
     ##2 UPDATE before run
-    CompanyName = "Confidential Careers"
+    CompanyName = "Sigma"
     ##3 UPDATE before run
-    JobTitle = "Senior Software Engineer"
+    JobTitle = "Senior .NET Developer"
     ##4 UPDATE before run (optional)
     # Leave empty to derive "<CompanyName> - <JobTitle>.docx" or "<CompanyName>.docx"
     OutputCvFileName = ""
@@ -40,14 +40,14 @@ $RunnerConfig = @{
             MinIntervalSeconds = "1"
             Max429Attempts = "4"
             BackoffBaseSeconds = "1"
-        }   
+        }
         model_heavy = @{
             ModelName = "gemini-2.5-pro"
             GenerationMode = "concurrent"
             MinIntervalSeconds = "1"
             Max429Attempts = "5"
             BackoffBaseSeconds = "1"
-        }   
+        }
     }
 
     # Optional

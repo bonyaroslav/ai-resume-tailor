@@ -195,7 +195,7 @@ def test_load_existing_run_job_description_migrates_legacy_file() -> None:
     assert jd_path.read_text(encoding="utf-8") == "Legacy job description"
 
 
-RUN_LOCAL_SCRIPT = Path("run_local.ps1").resolve()
+RUN_LOCAL_SCRIPT = Path("tools/run_local.ps1").resolve()
 
 
 def _ps_string_literal(value: str) -> str:
@@ -294,7 +294,7 @@ def test_run_local_resolves_output_cv_filename(
 ) -> None:
     tmp_dir = make_workspace_temp_dir("run-local-ps1")
     project_root, log_path = _write_fake_runner_project(tmp_dir)
-    config_path = tmp_dir / "runner.config.ps1"
+    config_path = tmp_dir / "RUNNER.config.ps1"
     _write_runner_config(
         config_path,
         project_root=project_root,

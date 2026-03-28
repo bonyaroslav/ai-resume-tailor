@@ -1,5 +1,5 @@
 param(
-    [string]$ConfigPath = ".\runner.config.ps1"
+    [string]$ConfigPath = (Join-Path $PSScriptRoot "RUNNER.config.ps1")
 )
 
 Set-StrictMode -Version Latest
@@ -103,11 +103,11 @@ if (-not (Test-Path -LiteralPath $jdPath)) {
     throw "Job description file not found: $jdPath"
 }
 if ([string]::IsNullOrWhiteSpace($companyName)) {
-    throw "CompanyName must not be empty in runner.config.ps1"
+    throw "CompanyName must not be empty in RUNNER.config.ps1"
 }
 if ([string]::IsNullOrWhiteSpace($outputCvFileName)) {
     $outputCvFileName = Resolve-OutputCvFileName -ConfiguredOutputCvFileName $outputCvFileName -CompanyName $companyName -JobTitle $jobTitle
-    Write-Host "OutputCvFileName is empty in runner.config.ps1; defaulting to $outputCvFileName"
+    Write-Host "OutputCvFileName is empty in RUNNER.config.ps1; defaulting to $outputCvFileName"
 }
 if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
     $outputCvFileName = $outputCvFileName.Trim()
@@ -125,14 +125,14 @@ if (-not [string]::IsNullOrWhiteSpace($outputCvFileName)) {
     }
 }
 if ([string]::IsNullOrWhiteSpace($tierName)) {
-    throw "TierName must not be empty in runner.config.ps1"
+    throw "TierName must not be empty in RUNNER.config.ps1"
 }
 if ([string]::IsNullOrWhiteSpace($inputProfile)) {
-    Write-Host "InputProfile is empty in runner.config.ps1; defaulting to $defaultInputProfile"
+    Write-Host "InputProfile is empty in RUNNER.config.ps1; defaulting to $defaultInputProfile"
     $inputProfile = $defaultInputProfile
 }
 if (-not $tierProfiles) {
-    throw "TierProfiles must be defined in runner.config.ps1"
+    throw "TierProfiles must be defined in RUNNER.config.ps1"
 }
 $tierProfile = $tierProfiles[$tierName]
 if (-not $tierProfile) {

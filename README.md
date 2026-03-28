@@ -313,11 +313,11 @@ If you do not want to type API key / JD path / company each run:
 
 1. Copy `secrets\gemini_api_key.example.txt` to `secrets\gemini_api_key.txt`.
 2. Put your key inside `secrets\gemini_api_key.txt` (gitignored).
-3. Edit `runner.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `JobTitle`, optional `OutputCvFileName`, optional `ModelName`).
+3. Edit `tools\RUNNER.config.ps1` once (`JobDescriptionPath`, `CompanyName`, optional `JobTitle`, optional `OutputCvFileName`, optional `ModelName`).
 4. Run:
 
 ```powershell
-.\run_local.ps1
+.\tools\run_local.ps1
 ```
 
 If `OutputCvFileName` is empty, the runner derives it automatically as `CompanyName - JobTitle.docx` or `CompanyName.docx` when `JobTitle` is blank.
@@ -353,7 +353,7 @@ python main.py run --jd-path .\inputs\job_description.md --company "Stripe"
 
 Model can be changed locally via:
 
-- `runner.config.ps1` (`ModelName`)
+- `tools\RUNNER.config.ps1` (`ModelName`)
 - CLI: `--model`
 - env: `$env:GEMINI_MODEL="..."`
 - code default: `DEFAULT_GEMINI_MODEL` in `settings.py`
@@ -430,5 +430,6 @@ Knowledge files and run artifacts stay in repo-local directories. During live ge
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
 
 

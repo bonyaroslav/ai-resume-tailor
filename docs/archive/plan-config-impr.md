@@ -25,7 +25,7 @@ $RunnerConfig = @{
 
 1. Rename profile folders in `knowledge/`, `prompts/`, and
    `offline_fixtures/` to the shorter values.
-2. Update `runner.config.ps1` and `run_local.ps1` to use `InputProfile`.
+2. Update `tools/RUNNER.config.ps1` and `tools/run_local.ps1` to use `InputProfile`.
 3. Rename Python settings/helpers from role-based naming to input-profile
    naming and keep the implementation centered on one canonical internal term:
    `input_profile`.
@@ -40,8 +40,8 @@ $RunnerConfig = @{
 
 ### Files Expected To Change
 
-- `runner.config.ps1`
-- `run_local.ps1`
+- `tools/RUNNER.config.ps1`
+- `tools/run_local.ps1`
 - `settings.py`
 - `main.py`
 - `llm_client.py`
@@ -59,3 +59,5 @@ $RunnerConfig = @{
 4. Confirm existing run metadata and cache records still load when they contain
    the legacy `role_name` key.
 5. Confirm formatter, linter, and tests pass.
+
+

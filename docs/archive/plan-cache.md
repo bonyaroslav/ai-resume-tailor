@@ -77,7 +77,7 @@ When the app launches for a role such as `role_engineer`:
 
 ## Operator Controls
 
-Use `runner.config.ps1` as the main place to control behavior.
+Use `tools/RUNNER.config.ps1` as the main place to control behavior.
 
 Add settings:
 - `UseRoleWideKnowledgeCache = $true`
@@ -86,7 +86,7 @@ Add settings:
 - `KnowledgeCacheTtlSeconds = 3600`
 - `KnowledgeCacheRegistryPath = ".\\runs\\_cache\\role_wide_knowledge_cache_registry.json"`
 
-`run_local.ps1` should map these into env vars or CLI flags.
+`tools/run_local.ps1` should map these into env vars or CLI flags.
 
 Recommended runtime controls:
 - env: `ART_USE_ROLE_WIDE_KNOWLEDGE_CACHE=1`
@@ -256,8 +256,8 @@ Reason:
 ## Files To Change
 
 Likely code areas:
-- `runner.config.ps1`
-- `run_local.ps1`
+- `tools/RUNNER.config.ps1`
+- `tools/run_local.ps1`
 - `main.py`
 - `prompt_loader.py`
 - `llm_client.py`
@@ -345,4 +345,6 @@ This is the best balance of:
 - future extensibility
 
 Do not add JD caching or per-section caches in the same implementation. Those are separate optimizations and would make the first version harder to validate.
+
+
 
