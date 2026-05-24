@@ -12,11 +12,11 @@ def test_state_has_canonical_template_section_ids() -> None:
 
 
 def test_experience_placeholder_suffix_normalizes_to_canonical_state_key() -> None:
-    placeholder_name = "section_experience_2_previous"
+    placeholder_name = "section_experience_4_latest"
     canonical = normalize_section_id(placeholder_name)
     state = create_initial_state("run-1")
     assert canonical in state.section_states
-    assert canonical == "section_experience_2"
+    assert canonical == "section_experience_4"
 
 
 def test_cover_letter_is_not_template_section() -> None:

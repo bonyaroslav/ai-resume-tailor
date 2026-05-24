@@ -25,7 +25,8 @@ def _write_minimal_prompt_set(prompts_dir: Path) -> None:
     _write(prompts_dir / "section_skills_alignment.md", "Skills")
     _write(prompts_dir / "section_experience_1_oldest.md", "Exp1")
     _write(prompts_dir / "section_experience_2_previous.md", "Exp2")
-    _write(prompts_dir / "section_experience_3_latest.md", "Exp3")
+    _write(prompts_dir / "section_experience_3.md", "Exp3")
+    _write(prompts_dir / "section_experience_4_latest.md", "Exp4")
     _write(prompts_dir / "doc_cover_letter.md", "Cover")
     _write(prompts_dir / "audit_cv_deep_dive.md", "Audit")
 
@@ -50,6 +51,10 @@ Summary prompt body
     assert tuple(templates.keys()) == WORKFLOW_SECTION_IDS
     assert (
         templates["section_professional_summary"].knowledge_files[0].name == "skills.md"
+    )
+    assert templates["section_experience_3"].path.name == "section_experience_3.md"
+    assert (
+        templates["section_experience_4"].path.name == "section_experience_4_latest.md"
     )
 
 
@@ -97,7 +102,7 @@ def test_discover_prompt_templates_resolves_knowledge_file_by_prefix() -> None:
     _write_minimal_prompt_set(prompts_dir)
     _write(knowledge_dir / "accomplishments_work_3_manager_argusmedia.md", "argus")
     _write(
-        prompts_dir / "section_experience_3_latest.md",
+        prompts_dir / "section_experience_3.md",
         """---
 knowledge_files:
   - "accomplishments_work_3_argusmedia.md"
@@ -122,7 +127,7 @@ def test_discover_prompt_templates_fails_on_ambiguous_prefix_match() -> None:
     _write(knowledge_dir / "accomplishments_work_3_manager_argusmedia.md", "argus")
     _write(knowledge_dir / "accomplishments_work_3_fintech.md", "fintech")
     _write(
-        prompts_dir / "section_experience_3_latest.md",
+        prompts_dir / "section_experience_3.md",
         """---
 knowledge_files:
   - "accomplishments_work_3_argusmedia.md"
@@ -149,7 +154,8 @@ def test_discover_prompt_templates_fails_on_duplicate_normalized_experience_sect
     _write(prompts_dir / "section_experience_1_oldest.md", "Exp1")
     _write(prompts_dir / "section_experience_1_latest.md", "Exp1 dup")
     _write(prompts_dir / "section_experience_2_previous.md", "Exp2")
-    _write(prompts_dir / "section_experience_3_latest.md", "Exp3")
+    _write(prompts_dir / "section_experience_3.md", "Exp3")
+    _write(prompts_dir / "section_experience_4_latest.md", "Exp4")
     _write(prompts_dir / "doc_cover_letter.md", "Cover")
     _write(prompts_dir / "audit_cv_deep_dive.md", "Audit")
 
@@ -166,7 +172,8 @@ def test_discover_prompt_templates_rejects_example_only_files() -> None:
     _write(prompts_dir / "section_skills_alignment.example.md", "Skills")
     _write(prompts_dir / "section_experience_1_oldest.example.md", "Exp1")
     _write(prompts_dir / "section_experience_2_previous.example.md", "Exp2")
-    _write(prompts_dir / "section_experience_3_latest.example.md", "Exp3")
+    _write(prompts_dir / "section_experience_3.example.md", "Exp3")
+    _write(prompts_dir / "section_experience_4_latest.example.md", "Exp4")
     _write(prompts_dir / "doc_cover_letter.example.md", "Cover")
     _write(prompts_dir / "audit_cv_deep_dive.example.md", "Audit")
 

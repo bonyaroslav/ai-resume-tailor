@@ -30,7 +30,8 @@ def _make_template(path: Path) -> None:
     document.add_paragraph("Skills: {{section_skills_alignment}}")
     document.add_paragraph("Exp1: {{section_experience_1_oldest}}")
     document.add_paragraph("Exp2: {{section_experience_2_previous}}")
-    document.add_paragraph("Exp3: {{section_experience_3_latest}}")
+    document.add_paragraph("Exp4: {{section_experience_4_latest}}")
+    document.add_paragraph("Exp3: {{section_experience_3}}")
     document.save(path)
 
 
@@ -332,6 +333,8 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert "Approved content for section_experience_1" in output_text
     assert "Approved content for section_experience_2" in output_text
     assert "Approved content for section_experience_3" in output_text
+    assert "Approved content for section_experience_4" in output_text
+    assert "{{" not in output_text
 
     cover_letters = context.output_cover_letters_path.read_text(encoding="utf-8")
     assert "## Final Approved Version" in cover_letters

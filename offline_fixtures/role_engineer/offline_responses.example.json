@@ -130,6 +130,16 @@
       }
     ]
   },
+  "section_experience_4": {
+    "variations": [
+      {
+        "id": "A",
+        "score_0_to_100": 88,
+        "ai_reasoning": "Highlights the newest independent contracting experience.",
+        "content_for_template": "- Delivered focused backend and automation improvements for independent client work.\n- Turned ambiguous operational needs into practical scripts, APIs, and workflow improvements.\n- Applied production engineering habits across testing, observability, and maintainable delivery.\n- Adapted quickly across business contexts while keeping implementation simple and reliable."
+      }
+    ]
+  },
   "doc_cover_letter": {
     "variations": [
       {

@@ -6,15 +6,15 @@ $RunnerConfig = @{
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ Sigma Healthcare (1).md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ZentixSoft _SeniorPolyglotEng.md"
     ##2 UPDATE before run
-    CompanyName = "Sigma"
+    CompanyName = "ZentixSoft"
     ##3 UPDATE before run
-    JobTitle = "Senior .NET Developer"
+    JobTitle = "SeniorPolyglotEng"
     ##4 UPDATE before run (optional)
     # Leave empty to derive "<CompanyName> - <JobTitle>.docx" or "<CompanyName>.docx"
     OutputCvFileName = ""
-    ##5 UPDATE before run
+    ##5 UPDATE before run 
     TierName = "model_flash"
     ##6 UPDATE before run
     InputProfile = "role_engineer"

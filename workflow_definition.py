@@ -13,6 +13,7 @@ WORKFLOW_SECTION_IDS: tuple[str, ...] = (
     "section_experience_1",
     "section_experience_2",
     "section_experience_3",
+    "section_experience_4",
     COVER_LETTER_SECTION_ID,
     AUDIT_SECTION_ID,
 )
@@ -23,6 +24,7 @@ GENERATION_SECTION_IDS: tuple[str, ...] = (
     "section_experience_1",
     "section_experience_2",
     "section_experience_3",
+    "section_experience_4",
     COVER_LETTER_SECTION_ID,
 )
 TEMPLATE_SECTION_IDS: tuple[str, ...] = tuple(

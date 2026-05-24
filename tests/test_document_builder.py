@@ -23,7 +23,8 @@ def _make_template(path: Path) -> None:
     document.add_paragraph("Skills: {{section_skills_alignment}}")
     document.add_paragraph("Exp1: {{section_experience_1_oldest}}")
     document.add_paragraph("Exp2: {{section_experience_2_previous}}")
-    document.add_paragraph("Exp3: {{section_experience_3_latest}}")
+    document.add_paragraph("Exp4: {{section_experience_4_latest}}")
+    document.add_paragraph("Exp3: {{section_experience_3}}")
     document.save(path)
 
 
@@ -43,6 +44,7 @@ def test_preflight_and_assemble_docx_with_normalized_experience_placeholders() -
             "section_experience_1": "EXP1 OUT",
             "section_experience_2": "EXP2 OUT",
             "section_experience_3": "EXP3 OUT",
+            "section_experience_4": "EXP4 OUT",
         },
     )
 
@@ -53,6 +55,8 @@ def test_preflight_and_assemble_docx_with_normalized_experience_placeholders() -
     assert "EXP1 OUT" in text
     assert "EXP2 OUT" in text
     assert "EXP3 OUT" in text
+    assert "EXP4 OUT" in text
+    assert "{{" not in text
 
 
 def test_duplicate_normalized_placeholders_fail_fast() -> None:
@@ -82,12 +86,14 @@ def test_extract_docx_text_reads_rendered_text() -> None:
             "section_experience_1": "EXP1 OUT",
             "section_experience_2": "EXP2 OUT",
             "section_experience_3": "EXP3 OUT",
+            "section_experience_4": "EXP4 OUT",
         },
     )
 
     extracted = extract_docx_text(output_path)
     assert "SUMMARY OUT" in extracted
     assert "EXP3 OUT" in extracted
+    assert "EXP4 OUT" in extracted
 
 
 def test_write_cover_letters_markdown_exports_selected_and_variations() -> None:
