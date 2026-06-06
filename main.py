@@ -873,6 +873,7 @@ def _prepare_runtime_context(
         output_cv_path=run_dir / output_cv_filename,
         output_cover_letters_path=run_dir / "cover_letters.md",
         output_audit_path=run_dir / "cv_deep_dive_audit.md",
+        output_company_investigation_path=run_dir / "company_investigation.md",
         company_name=company_name,
         job_description_path=job_description_path,
         job_description=job_description,

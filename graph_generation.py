@@ -68,6 +68,7 @@ class RuntimeContext:
     output_cv_path: Path
     output_cover_letters_path: Path
     output_audit_path: Path
+    output_company_investigation_path: Path
     company_name: str
     job_description_path: Path
     job_description: str
@@ -130,6 +131,14 @@ def _prompt_triage_confirmation(*, suggested_action: str) -> str:
         if action in {"continue", "stop"}:
             return action
         print("Invalid decision. Use continue/stop (or c/s).")
+
+
+def _write_company_investigation(
+    output_path: Path, triage_result: TriageResult
+) -> None:
+    output_path.write_text(
+        triage_result.report_markdown.strip() + "\n", encoding="utf-8"
+    )
 
 
 def _heartbeat_interval_seconds() -> int:
@@ -564,6 +573,14 @@ async def node_triage(
     section_state = state.section_states[TRIAGE_SECTION_ID]
     triage_result = await _generate_triage_result(section_state, context, logger)
     render_triage_result(TRIAGE_SECTION_ID, triage_result)
+    _write_company_investigation(
+        context.output_company_investigation_path,
+        triage_result,
+    )
+    logger.info(
+        "Generated company investigation: %s",
+        context.output_company_investigation_path,
+    )
     selected = Variation(
         id="TRIAGE",
         score_0_to_100=triage_result.decision_score_0_to_100,
@@ -595,6 +612,13 @@ async def node_triage(
             "Auto triage decision enabled. mode=%s suggested_action=%s",
             context.triage_decision_mode,
             suggested_action,
+        )
+    elif context.auto_approve_review:
+        user_action = "continue"
+        logger.info(
+            "Auto triage decision enabled by auto review mode. suggested_action=%s forced_action=%s",
+            suggested_action,
+            user_action,
         )
     else:
         print("")

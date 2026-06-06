@@ -57,6 +57,7 @@ def _build_runtime_context(run_dir: Path, template_path: Path) -> RuntimeContext
         output_cv_path=run_dir / "tailored_cv.docx",
         output_cover_letters_path=run_dir / "cover_letters.md",
         output_audit_path=run_dir / "cv_deep_dive_audit.md",
+        output_company_investigation_path=run_dir / "company_investigation.md",
         company_name="Acme",
         job_description_path=job_description_path,
         job_description="Example JD",
@@ -309,6 +310,7 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert context.output_cv_path.exists()
     assert context.output_cover_letters_path.exists()
     assert context.output_audit_path.exists()
+    assert context.output_company_investigation_path.exists()
     checkpoint_state = load_checkpoint(context.checkpoint_path)
     assert checkpoint_state.status == "completed"
     assert checkpoint_state.section_states["section_skills_alignment"].ai_outputs
@@ -340,6 +342,11 @@ def test_run_graph_completes_with_mocked_llm_and_review_choices(
     assert "## Final Approved Version" in cover_letters
     assert "Approved content for doc_cover_letter" in cover_letters
     assert "## Variation A" in cover_letters
+    investigation_text = context.output_company_investigation_path.read_text(
+        encoding="utf-8"
+    )
+    assert "### Final Verdict" in investigation_text
+    assert "Proceed with this role." in investigation_text
     audit_text = context.output_audit_path.read_text(encoding="utf-8")
     assert "# Deep Dive CV Audit" in audit_text
 
@@ -475,6 +482,12 @@ def test_run_graph_stops_at_triage_when_user_selects_stop(monkeypatch: object) -
 
     assert final_state.status == "completed"
     assert final_state.current_node == "triage_stop"
+    assert context.output_company_investigation_path.exists()
+    investigation_text = context.output_company_investigation_path.read_text(
+        encoding="utf-8"
+    )
+    assert "### Final Verdict" in investigation_text
+    assert "Avoid." in investigation_text
     assert not context.output_cv_path.exists()
     assert not context.output_cover_letters_path.exists()
     assert not context.output_audit_path.exists()
@@ -556,6 +569,7 @@ def test_run_graph_always_continue_ignores_avoid_triage(monkeypatch: object) -> 
 
     assert final_state.status == "completed"
     assert final_state.current_node == "completed"
+    assert context.output_company_investigation_path.exists()
     assert context.output_cv_path.exists()
     assert context.output_cover_letters_path.exists()
     assert context.output_audit_path.exists()

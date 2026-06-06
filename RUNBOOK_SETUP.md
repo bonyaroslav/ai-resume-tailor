@@ -51,6 +51,7 @@ Expected artifacts under `runs/<run_id>/`:
 - `state_checkpoint.json`
 - `tailored_cv.docx`
 - `cover_letters.md`
+- `company_investigation.md`
 - `cv_deep_dive_audit.md`
 - `job_description.md`
 

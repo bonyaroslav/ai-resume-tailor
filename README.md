@@ -225,7 +225,7 @@ To complement the vision above, the current shipped V1 behavior is strict and de
 * **Review actions:** per section `choose | edit | retry`, plus global `save_and_exit`
 * **Generation controls:** sequential by default, concurrent optional, with pacing and 429 backoff
 * **Prompt/template safety rules:** canonical section normalization, duplicate ID detection, and fail-fast validation
-* **Run outputs:** `tailored_cv.docx`, `cover_letters.md`, `cv_deep_dive_audit.md`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
+* **Run outputs:** `company_investigation.md`, `tailored_cv.docx`, `cover_letters.md`, `cv_deep_dive_audit.md`, `job_description.md`, checkpoint + metadata + logs under `runs/...`
 
 ## 🤖 Why It Is Interesting for GenAI Engineering
 
