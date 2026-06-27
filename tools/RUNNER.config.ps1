@@ -6,11 +6,11 @@ $RunnerConfig = @{
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_ZentixSoft _SeniorPolyglotEng.md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_asdf.md"
     ##2 UPDATE before run
-    CompanyName = "ZentixSoft"
+    CompanyName = "XXXX"
     ##3 UPDATE before run
-    JobTitle = "SeniorPolyglotEng"
+    JobTitle = "YYYYYY"
     ##4 UPDATE before run (optional)
     # Leave empty to derive "<CompanyName> - <JobTitle>.docx" or "<CompanyName>.docx"
     OutputCvFileName = ""
@@ -28,21 +28,21 @@ $RunnerConfig = @{
     # One-place switch for model + throughput behavior.
     TierProfiles = @{
         freetier = @{
-            ModelName = "gemini-2.5-flash"
+            ModelName = "gemini-3-flash"
             GenerationMode = "sequential"
             MinIntervalSeconds = "15"
             Max429Attempts = "5"
             BackoffBaseSeconds = "2"
         }
         model_flash = @{
-            ModelName = "gemini-2.5-flash"
+            ModelName = "gemini-3.5-flash"
             GenerationMode = "concurrent"
             MinIntervalSeconds = "1"
             Max429Attempts = "4"
             BackoffBaseSeconds = "1"
         }
         model_heavy = @{
-            ModelName = "gemini-2.5-pro"
+            ModelName = "gemini-3.1-pro"
             GenerationMode = "concurrent"
             MinIntervalSeconds = "1"
             Max429Attempts = "5"

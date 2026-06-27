@@ -28,6 +28,7 @@ from knowledge_cache import (
     KnowledgeCacheError,
     prepare_run_scoped_knowledge_cache,
 )
+from llm_client import LlmClientError
 from logging_utils import configure_logging, log_failure, sha256_short
 from prompt_loader import PromptValidationError, discover_prompt_templates
 from run_artifacts import create_run_directory, load_run_metadata, write_run_metadata
@@ -1106,8 +1107,12 @@ def main() -> None:
         PromptValidationError,
         TemplateValidationError,
         KnowledgeCacheError,
+        LlmClientError,
     ) as exc:
-        raise SystemExit(str(exc)) from exc
+        # The full traceback is already written to the run log via
+        # logger.exception; show the user the actionable message only so they
+        # don't have to dig through a stack trace to understand the failure.
+        raise SystemExit(f"Run failed: {exc}") from exc
 
 
 if __name__ == "__main__":

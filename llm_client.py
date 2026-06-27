@@ -466,6 +466,36 @@ def _extract_api_error_detail(exc: Exception) -> str:
     return " | ".join(details) if details else str(exc)
 
 
+def _is_invalid_argument_error(exc: Exception) -> bool:
+    if _status_code_from_exception(exc) == 400:
+        return True
+    return "INVALID_ARGUMENT" in str(exc).upper()
+
+
+def _describe_request_failure(
+    exc: Exception, *, cached_content_name: str | None
+) -> str:
+    """Build an actionable, human-readable failure message for the user.
+
+    A bare ``400 INVALID_ARGUMENT`` from Gemini is opaque. When the request
+    reused a knowledge cache, the most common cause is that the reused cached
+    content is stale or invalid on the server (a freshly rebuilt cache with the
+    same files works). Surface the concrete fix instead of the raw status.
+    """
+    detail = _extract_api_error_detail(exc)
+    if cached_content_name and _is_invalid_argument_error(exc):
+        return (
+            "Gemini rejected the request with 400 INVALID_ARGUMENT while reusing "
+            f"the knowledge cache '{cached_content_name}'. This almost always means "
+            "the reused cached content is stale or invalid on Gemini's side "
+            "(rebuilding the same cache fixes it). To fix: rerun with "
+            "InvalidateRoleWideKnowledgeCache=$true to rebuild the cache, or set "
+            "UseRoleWideKnowledgeCache=$false to bypass caching for this run. "
+            f"Underlying API error: {detail}"
+        )
+    return f"Gemini request failed: {detail}"
+
+
 def _status_code_from_exception(exc: Exception) -> int | None:
     status_code = getattr(exc, "status_code", None)
     if isinstance(status_code, int):
@@ -761,7 +791,9 @@ def _generate_with_fallback(
             if isinstance(exc, QuotaExceededError):
                 raise
             raise LlmClientError(
-                f"Gemini request failed: {_extract_api_error_detail(exc)}"
+                _describe_request_failure(
+                    exc, cached_content_name=cached_content_name
+                )
             ) from exc
         return _response_to_text(response)
 
@@ -780,7 +812,9 @@ def _generate_with_fallback(
             raise
         if not _is_schema_config_error(exc):
             raise LlmClientError(
-                f"Gemini request failed: {_extract_api_error_detail(exc)}"
+                _describe_request_failure(
+                    exc, cached_content_name=cached_content_name
+                )
             ) from exc
         try:
             response = _request_content_with_backoff(
