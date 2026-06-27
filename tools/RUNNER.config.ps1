@@ -6,11 +6,11 @@ $RunnerConfig = @{
     ApiKeyFile = ".\secrets\gemini_api_key.txt"
 
     ##1 UPDATE before run
-    JobDescriptionPath = "C:\Users\bonya\Downloads\JD_asdf.md"
+    JobDescriptionPath = "C:\Users\bonya\Downloads\asdf.md"
     ##2 UPDATE before run
     CompanyName = "XXXX"
     ##3 UPDATE before run
-    JobTitle = "YYYYYY"
+    JobTitle = "YYY"
     ##4 UPDATE before run (optional)
     # Leave empty to derive "<CompanyName> - <JobTitle>.docx" or "<CompanyName>.docx"
     OutputCvFileName = ""

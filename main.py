@@ -4,6 +4,8 @@ import argparse
 import asyncio
 import logging
 import os
+import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
@@ -43,7 +45,11 @@ from settings import (
     resolve_output_cv_filename,
 )
 from workflow_definition import (
+    ASSEMBLE_STEP_ID,
+    AUDIT_SECTION_ID,
     GENERATION_SECTION_IDS,
+    PIPELINE_STEP_IDS,
+    PIPELINE_STEP_LABELS,
     TEMPLATE_SECTION_IDS,
     TRIAGE_SECTION_ID,
 )
@@ -316,28 +322,6 @@ def _mark_sections_for_regeneration(
     touch_state(state)
 
 
-def _prompt_sections_for_regeneration() -> list[str]:
-    print("Available section IDs:")
-    for section_id in GENERATION_SECTION_IDS:
-        print(f"- {section_id}")
-    while True:
-        raw = input("Sections to regenerate (comma-separated or 'all'): ").strip()
-        if not raw:
-            print("Please provide at least one section id or 'all'.")
-            continue
-        if raw.lower() == "all":
-            return list(GENERATION_SECTION_IDS)
-        requested = [item.strip() for item in raw.split(",") if item.strip()]
-        unique_requested = list(dict.fromkeys(requested))
-        invalid = [
-            item for item in unique_requested if item not in GENERATION_SECTION_IDS
-        ]
-        if invalid:
-            print(f"Unknown section ids: {', '.join(invalid)}")
-            continue
-        return unique_requested
-
-
 def _prepare_rebuild_from_completed_state(state: GraphState) -> bool:
     missing_sections = [
         section_id
@@ -591,6 +575,198 @@ def _ensure_rebuild_allowed(state: GraphState) -> None:
         )
 
 
+def _step_status_label(state: GraphState, step_id: str) -> str:
+    """Coarse, display-only status for a pipeline step."""
+    if step_id == ASSEMBLE_STEP_ID:
+        if state.status == "completed":
+            return "done"
+        all_approved = all(
+            state.section_states[section_id].selected_content
+            for section_id in GENERATION_SECTION_IDS
+        )
+        return "ready" if all_approved else "pending"
+
+    section_state = state.section_states[step_id]
+    mapping = {
+        "approved": "done",
+        "generated": "generated",
+        "retry_requested": "retry",
+        "pending": "pending",
+    }
+    return mapping.get(section_state.status, section_state.status)
+
+
+def _stopped_step_id(state: GraphState) -> str | None:
+    """Best-effort: which step execution is currently positioned at."""
+    node = state.current_node
+    if node == "triage":
+        return TRIAGE_SECTION_ID
+    if node == ASSEMBLE_STEP_ID:
+        return ASSEMBLE_STEP_ID
+    if node == AUDIT_SECTION_ID:
+        return AUDIT_SECTION_ID
+    if node in {"generate_sections", "review"}:
+        for section_id in GENERATION_SECTION_IDS:
+            if not state.section_states[section_id].selected_content:
+                return section_id
+    return None
+
+
+def _print_pipeline_steps(state: GraphState, run_dir: Path) -> None:
+    stopped = _stopped_step_id(state)
+    stopped_index = (
+        PIPELINE_STEP_IDS.index(stopped) + 1 if stopped is not None else None
+    )
+    print("")
+    print("=" * 72)
+    print(f"Run folder: {run_dir}")
+    header = f"Overall status: {state.status} | Current node: {state.current_node}"
+    if stopped_index is not None:
+        header += f" | stopped at: step {stopped_index} {PIPELINE_STEP_LABELS[stopped]}"
+    print(header)
+    print("=" * 72)
+    for index, step_id in enumerate(PIPELINE_STEP_IDS, start=1):
+        marker = " <- stopped" if step_id == stopped else ""
+        label = PIPELINE_STEP_LABELS[step_id]
+        status = _step_status_label(state, step_id)
+        print(f"  {index:>2}. {label:<32} {status}{marker}")
+    print("=" * 72)
+
+
+def _stdin_is_interactive() -> bool:
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except (ValueError, OSError):
+        return False
+
+
+def _prompt_yes_no(prompt_text: str, *, default: bool = False) -> bool:
+    suffix = "Y/n" if default else "y/N"
+    try:
+        raw = input(f"{prompt_text} ({suffix}): ").strip().lower()
+    except EOFError:
+        return default
+    if not raw:
+        return default
+    return raw in {"y", "yes"}
+
+
+def _prompt_resume_choice() -> str:
+    print("")
+    print("[r] resume   [o] regenerate one step   [s] restart from a step")
+    print("[f] full restart (wipe & regenerate)   [e] exit")
+    return _prompt_action(
+        "Choice (r/o/s/f/e) [r]: ",
+        {
+            "": "resume",
+            "r": "resume",
+            "resume": "resume",
+            "o": "regen_one",
+            "s": "restart_from",
+            "f": "full_restart",
+            "e": "exit",
+            "exit": "exit",
+        },
+    )
+
+
+def _prompt_step_number() -> str | None:
+    upper = len(PIPELINE_STEP_IDS)
+    while True:
+        try:
+            raw = input(f"Step number (1-{upper}, blank to cancel): ").strip()
+        except EOFError:
+            return None
+        if not raw:
+            return None
+        if raw.isdigit() and 1 <= int(raw) <= upper:
+            return PIPELINE_STEP_IDS[int(raw) - 1]
+        print(f"Please enter a step number between 1 and {upper}.")
+
+
+def _reset_section_state(state: GraphState, section_id: str, note: str = "") -> None:
+    state.section_states[section_id] = SectionState(user_note=note or None)
+
+
+def _regenerate_one_step(state: GraphState, step_id: str, note: str) -> bool:
+    """Reset exactly one step so the pipeline re-runs it (tail rebuilds outputs)."""
+    if step_id in GENERATION_SECTION_IDS:
+        _mark_sections_for_regeneration(state, [step_id], note)
+        return True
+    if step_id == TRIAGE_SECTION_ID:
+        _reset_section_state(state, TRIAGE_SECTION_ID, note)
+        state.status = "running"
+        state.current_node = "triage"
+        state.review_queue = []
+        touch_state(state)
+        return True
+    if step_id == ASSEMBLE_STEP_ID:
+        return _prepare_rebuild_from_completed_state(state)
+    if step_id == AUDIT_SECTION_ID:
+        _reset_section_state(state, AUDIT_SECTION_ID, note)
+        state.status = "running"
+        state.current_node = AUDIT_SECTION_ID
+        state.review_queue = []
+        touch_state(state)
+        return True
+    raise ValueError(f"Unknown pipeline step '{step_id}'.")
+
+
+def _restart_from_step(state: GraphState, step_id: str, note: str) -> bool:
+    """Re-run the chosen step and every downstream step (cascade)."""
+    start_index = PIPELINE_STEP_IDS.index(step_id)
+    downstream = PIPELINE_STEP_IDS[start_index:]
+    gen_targets = [s for s in downstream if s in GENERATION_SECTION_IDS]
+
+    if step_id == TRIAGE_SECTION_ID:
+        # Cascade from triage = re-run triage then regenerate every section
+        # (the destructive wipe variant is the separate "full restart" action).
+        _reset_section_state(state, TRIAGE_SECTION_ID, note)
+        _mark_sections_for_regeneration(state, list(GENERATION_SECTION_IDS), note)
+        state.current_node = "triage"
+        touch_state(state)
+        return True
+    if gen_targets:
+        _mark_sections_for_regeneration(state, gen_targets, note)
+        return True
+    # assemble or audit: no downstream generation sections, so this is one step.
+    return _regenerate_one_step(state, step_id, note)
+
+
+def _full_restart(run_dir: Path, checkpoint_path: Path) -> GraphState:
+    """Delete generated artifacts and reset the checkpoint to its initial state.
+
+    Keeps run_metadata.json and the job description; leaves unknown files alone.
+    """
+    try:
+        metadata = load_run_metadata(run_dir)
+    except Exception:
+        metadata = {}
+    output_cv_filename = resolve_output_cv_filename(
+        metadata_filename=metadata.get("output_cv_filename")
+    )
+    artifact_names = [
+        output_cv_filename,
+        "cover_letters.md",
+        "company_investigation.md",
+        "cv_deep_dive_audit.md",
+    ]
+    for name in artifact_names:
+        target = run_dir / name
+        if target.is_file():
+            target.unlink()
+            print(f"Removed: {target}")
+    responses_dir = run_dir / "responses"
+    if responses_dir.is_dir():
+        shutil.rmtree(responses_dir)
+        print(f"Removed: {responses_dir}")
+
+    state = create_initial_state(run_id=run_dir.name)
+    save_checkpoint(checkpoint_path, state)
+    print("Checkpoint reset to initial state.")
+    return state
+
+
 def _resolve_run_state_for_run_command(
     *,
     run_dir: Path,
@@ -603,60 +779,52 @@ def _resolve_run_state_for_run_command(
         return initial_state, "start"
 
     state = load_checkpoint(checkpoint_path)
-    _print_status_summary(state, run_dir)
-    _print_next_steps(state, run_dir)
+    _print_pipeline_steps(state, run_dir)
 
-    if state.status in {"running", "awaiting_review", "failed"}:
-        action = _prompt_action(
-            "Action [resume/exit] (r/e): ",
-            {"r": "resume", "e": "exit", "resume": "resume", "exit": "exit"},
-        )
-        return state, action
+    if not _stdin_is_interactive():
+        print("Non-interactive stdin detected; defaulting to resume.")
+        return state, "resume"
 
-    if state.current_node == "triage_stop":
-        action = _prompt_action(
-            "Action [continue_anyway/exit] (c/e): ",
-            {
-                "c": "continue_anyway",
-                "e": "exit",
-                "continue_anyway": "continue_anyway",
-                "exit": "exit",
-            },
-        )
-        if action == "continue_anyway":
+    try:
+        choice = _prompt_resume_choice()
+    except EOFError:
+        print("No input available; defaulting to resume.")
+        return state, "resume"
+
+    if choice == "exit":
+        return state, "exit"
+
+    if choice == "resume":
+        if state.current_node == "triage_stop":
+            # Resume past an AVOID verdict by continuing into generation.
             state.status = "running"
             state.current_node = "generate_sections"
             state.review_queue = []
             touch_state(state)
             save_checkpoint(checkpoint_path, state)
-        return state, action
+        return state, "resume"
 
-    if state.status == "completed":
-        action = _prompt_action(
-            "Action [rebuild/regenerate/exit] (b/g/e): ",
-            {
-                "b": "rebuild",
-                "g": "regenerate",
-                "e": "exit",
-                "rebuild": "rebuild",
-                "regenerate": "regenerate",
-                "exit": "exit",
-            },
-        )
-        if action == "rebuild":
-            if not _prepare_rebuild_from_completed_state(state):
-                return state, "exit"
-            save_checkpoint(checkpoint_path, state)
-            return state, "resume"
-        if action == "regenerate":
-            target_sections = _prompt_sections_for_regeneration()
-            note = _prompt_regeneration_note()
-            _mark_sections_for_regeneration(state, target_sections, note)
-            save_checkpoint(checkpoint_path, state)
-            return state, "resume"
+    if choice == "full_restart":
+        if not _prompt_yes_no(
+            "Full restart deletes generated artifacts for this run. Continue?"
+        ):
+            return state, "exit"
+        state = _full_restart(run_dir, checkpoint_path)
+        return state, "resume"
+
+    # regen_one / restart_from both need a target step.
+    step_id = _prompt_step_number()
+    if step_id is None:
         return state, "exit"
-
-    return state, "exit"
+    note = _prompt_regeneration_note() if step_id in GENERATION_SECTION_IDS else ""
+    if choice == "regen_one":
+        ok = _regenerate_one_step(state, step_id, note)
+    else:
+        ok = _restart_from_step(state, step_id, note)
+    if not ok:
+        return state, "exit"
+    save_checkpoint(checkpoint_path, state)
+    return state, "resume"
 
 
 def _save_checkpoint_or_raise(
