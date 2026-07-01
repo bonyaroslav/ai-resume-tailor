@@ -23,7 +23,7 @@ from graph_nodes import (
 )
 from graph_router import route_next_node
 from graph_state import GraphState, SectionState, create_initial_state, touch_state
-from job_description_loader import read_job_description
+from job_description_loader import read_job_description, resolve_company_and_title
 from knowledge_cache import (
     DEFAULT_KNOWLEDGE_CACHE_REGISTRY_PATH,
     DEFAULT_KNOWLEDGE_CACHE_TTL_SECONDS,
@@ -100,7 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Start a new run")
     run_parser.add_argument("--jd-path", required=True, type=Path)
-    run_parser.add_argument("--company", required=True)
+    run_parser.add_argument("--company", default=None)
     run_parser.add_argument("--job-title", default=None)
     run_parser.add_argument("--template-path", type=Path, default=None)
     run_parser.add_argument("--model", default=None)
@@ -1119,10 +1119,15 @@ def _persist_run_job_description(run_dir: Path, source_path: Path) -> tuple[Path
 
 
 async def _handle_run(args: argparse.Namespace) -> None:
+    args.company, args.job_title = resolve_company_and_title(
+        company=args.company,
+        job_title=getattr(args, "job_title", None),
+        jd_path=args.jd_path,
+    )
     run_dir = create_run_directory(
         Path("runs"),
         args.company,
-        getattr(args, "job_title", None),
+        args.job_title,
     )
     checkpoint_path = run_dir / "state_checkpoint.json"
     state, action = _resolve_run_state_for_run_command(

@@ -102,10 +102,9 @@ if (-not (Test-Path -LiteralPath $apiKeyFile)) {
 if (-not (Test-Path -LiteralPath $jdPath)) {
     throw "Job description file not found: $jdPath"
 }
-if ([string]::IsNullOrWhiteSpace($companyName)) {
-    throw "CompanyName must not be empty in RUNNER.config.ps1"
-}
-if ([string]::IsNullOrWhiteSpace($outputCvFileName)) {
+# CompanyName and JobTitle are optional; when blank they are derived from the
+# JobDescriptionPath filename by main.py.
+if ([string]::IsNullOrWhiteSpace($outputCvFileName) -and -not [string]::IsNullOrWhiteSpace($companyName)) {
     $outputCvFileName = Resolve-OutputCvFileName -ConfiguredOutputCvFileName $outputCvFileName -CompanyName $companyName -JobTitle $jobTitle
     Write-Host "OutputCvFileName is empty in RUNNER.config.ps1; defaulting to $outputCvFileName"
 }
@@ -218,7 +217,10 @@ else {
 }
 
 Write-Host "[5/5] Running AI Resume Tailor"
-$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--company", $companyName, "--model", $modelName, "--input-profile", $inputProfile)
+$runArgs = @("main.py", "run", "--jd-path", $jdPath, "--model", $modelName, "--input-profile", $inputProfile)
+if (-not [string]::IsNullOrWhiteSpace($companyName)) {
+    $runArgs += @("--company", $companyName)
+}
 if (-not [string]::IsNullOrWhiteSpace($jobTitle)) {
     $runArgs += @("--job-title", $jobTitle)
 }
