@@ -901,10 +901,39 @@ async def _run_graph(state: GraphState, context: RuntimeContext) -> GraphState:
         _job_description_preview(context.job_description, max_lines=3),
     )
 
+    last_progress_signature: tuple[str, str, tuple[str, ...]] | None = None
+    idle_iterations = 0
+    MAX_IDLE_ITERATIONS = 3
+
     while True:
         next_node = route_next_node(state)
         if next_node == "end":
             break
+
+        progress_signature = (
+            next_node,
+            state.status,
+            tuple(state.review_queue or ()),
+        )
+        if progress_signature == last_progress_signature:
+            idle_iterations += 1
+            if idle_iterations >= MAX_IDLE_ITERATIONS:
+                log_failure(
+                    logger,
+                    category="workflow_error",
+                    node=next_node,
+                    detail=(
+                        f"Workflow stalled at node '{next_node}' "
+                        f"with status='{state.status}' and unchanged state "
+                        f"across {idle_iterations + 1} iterations."
+                    ),
+                )
+                raise RuntimeError(
+                    f"Workflow stalled at node '{next_node}'; no state progress."
+                )
+        else:
+            idle_iterations = 0
+            last_progress_signature = progress_signature
 
         await _ensure_role_wide_knowledge_cache(
             state=state,

@@ -202,7 +202,18 @@ def node_review(
     print("- retry: request regeneration with guidance note")
     print("- save_and_exit: save progress and continue later")
     print(REVIEW_STEP_DELIMITER)
-    queue = state.review_queue or _generated_review_queue(state)
+    generated_now = _generated_review_queue(state)
+    persisted = [
+        section_id
+        for section_id in (state.review_queue or [])
+        if state.section_states[section_id].status == "generated"
+    ]
+    seen: set[str] = set()
+    queue = [
+        section_id
+        for section_id in persisted + generated_now
+        if not (section_id in seen or seen.add(section_id))
+    ]
 
     total = len(queue)
     if context.auto_approve_review:

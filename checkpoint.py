@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -66,6 +67,20 @@ def _migrate_checkpoint_data(data: dict[str, object]) -> dict[str, object]:
     )
 
 
+def _replace_with_retry(source: Path, target: Path) -> None:
+    # Windows: antivirus, indexers, editor previews, and OneDrive/Dropbox
+    # can hold a transient handle on the target file and cause os.replace
+    # to fail with PermissionError (WinError 5). Retry with short backoff.
+    delays = (0.05, 0.1, 0.25, 0.5, 1.0)
+    for delay in delays:
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            time.sleep(delay)
+    source.replace(target)
+
+
 def save_checkpoint(checkpoint_path: Path, state: GraphState) -> None:
     touch_state(state)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +90,7 @@ def save_checkpoint(checkpoint_path: Path, state: GraphState) -> None:
             json.dumps(state.model_dump(mode="json"), indent=2, ensure_ascii=True),
             encoding="utf-8",
         )
-        temp_path.replace(checkpoint_path)
+        _replace_with_retry(temp_path, checkpoint_path)
     except OSError as exc:
         raise CheckpointError(f"Unable to write checkpoint: {checkpoint_path}") from exc
 
