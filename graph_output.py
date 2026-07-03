@@ -12,6 +12,7 @@ from graph_generation import RuntimeContext, _record_ai_output, _request_llm
 from graph_state import GraphState, SectionState, Variation, touch_state
 from json_parser import ResponseSchemaError
 from logging_utils import log_failure
+from markdown_utils import write_markdown_file
 from prompt_loader import build_prompt_text
 from workflow_definition import (
     AUDIT_SECTION_ID,
@@ -143,7 +144,7 @@ async def node_audit(
         retry_count=section_state.retry_count,
         ai_outputs=section_state.ai_outputs,
     )
-    context.output_audit_path.write_text(audit_markdown + "\n", encoding="utf-8")
+    write_markdown_file(context.output_audit_path, audit_markdown)
     logger.info("Generated CV audit: %s", context.output_audit_path)
     state.current_node = "completed"
     state.status = "completed"

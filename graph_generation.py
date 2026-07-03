@@ -30,6 +30,7 @@ from json_parser import (
 )
 from llm_client import LlmGenerationResult, QuotaExceededError, generate_with_gemini
 from logging_utils import log_failure
+from markdown_utils import write_markdown_file
 from prompt_loader import build_prompt_text
 from section_ids import is_experience_section
 from workflow_definition import (
@@ -136,9 +137,7 @@ def _prompt_triage_confirmation(*, suggested_action: str) -> str:
 def _write_company_investigation(
     output_path: Path, triage_result: TriageResult
 ) -> None:
-    output_path.write_text(
-        triage_result.report_markdown.strip() + "\n", encoding="utf-8"
-    )
+    write_markdown_file(output_path, triage_result.report_markdown)
 
 
 def _heartbeat_interval_seconds() -> int:

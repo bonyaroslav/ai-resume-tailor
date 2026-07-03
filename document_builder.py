@@ -8,6 +8,7 @@ from docx import Document
 from docx.document import Document as DocumentType
 from docx.table import _Cell, Table
 
+from markdown_utils import write_markdown_file
 from section_ids import is_experience_section, normalize_section_id
 
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
@@ -114,7 +115,6 @@ def write_cover_letters_markdown(
     selected_content: str,
     variations: list[dict[str, str | int]],
 ) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "# Cover Letters",
         "",
@@ -134,4 +134,4 @@ def write_cover_letters_markdown(
             ]
         )
 
-    output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    write_markdown_file(output_path, "\n".join(lines))
