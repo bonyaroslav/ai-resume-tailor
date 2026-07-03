@@ -281,9 +281,7 @@ def _write_runner_config(
     [
         ("custom.docx", "Acme", "Senior Engineer", "custom.docx"),
         ("custom", "Acme", "Senior Engineer", "custom.docx"),
-        ("", "Acme", "Senior Engineer", "Acme - Senior Engineer.docx"),
-        ("", "Acme", "", "Acme.docx"),
-        ("", "Acme: Corp", "C#/.NET Lead.", "Acme_ Corp - C#_.NET Lead.docx"),
+        ("", "Acme", "Senior Engineer", ""),
     ],
 )
 def test_run_local_resolves_output_cv_filename(
@@ -334,3 +332,49 @@ def test_direct_python_flow_keeps_default_output_filename(
 ) -> None:
     monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
     assert resolve_output_cv_filename() == DEFAULT_OUTPUT_CV_FILENAME
+
+
+def test_output_filename_derived_from_company_and_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
+    assert (
+        resolve_output_cv_filename(
+            company_name="DevPro", job_title="SeniorSoftwareEngineerNET"
+        )
+        == "DevPro - SeniorSoftwareEngineerNET.docx"
+    )
+
+
+def test_output_filename_derived_from_company_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
+    assert (
+        resolve_output_cv_filename(company_name="DevPro", job_title="")
+        == "DevPro.docx"
+    )
+
+
+def test_output_filename_explicit_wins_over_derived(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ART_OUTPUT_CV_FILENAME", "custom.docx")
+    assert (
+        resolve_output_cv_filename(
+            company_name="DevPro", job_title="SeniorSoftwareEngineerNET"
+        )
+        == "custom.docx"
+    )
+
+
+def test_output_filename_sanitizes_illegal_chars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
+    assert (
+        resolve_output_cv_filename(
+            company_name="Dev/Pro", job_title="Senior:Engineer"
+        )
+        == "Dev_Pro - Senior_Engineer.docx"
+    )

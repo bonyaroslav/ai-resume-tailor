@@ -385,7 +385,9 @@ def _resolve_command_options(
             metadata_model=metadata.get("model_name"),
         ),
         output_cv_filename=resolve_output_cv_filename(
-            metadata_filename=metadata.get("output_cv_filename")
+            metadata_filename=metadata.get("output_cv_filename"),
+            company_name=metadata.get("company_name"),
+            job_title=metadata.get("job_title"),
         ),
         template_path=_resolve_template_path(
             explicit_template,

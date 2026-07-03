@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 GEMINI_MODEL_ENV = "GEMINI_MODEL"
@@ -66,10 +67,32 @@ def _normalize_output_cv_filename(value: str | None) -> str | None:
     return path.name
 
 
+_FILENAME_SANITIZE_RE = re.compile(r'[<>:"/\\|?*]')
+
+
+def _sanitize_filename_part(value: str | None) -> str:
+    if not value:
+        return ""
+    sanitized = _FILENAME_SANITIZE_RE.sub("_", value.strip())
+    return sanitized.rstrip(" .")
+
+
+def _derive_output_cv_filename(company: str | None, job_title: str | None) -> str | None:
+    sanitized_company = _sanitize_filename_part(company)
+    if not sanitized_company:
+        return None
+    sanitized_title = _sanitize_filename_part(job_title)
+    if sanitized_title:
+        return f"{sanitized_company} - {sanitized_title}.docx"
+    return f"{sanitized_company}.docx"
+
+
 def resolve_output_cv_filename(
     explicit_filename: str | None = None,
     *,
     metadata_filename: str | None = None,
+    company_name: str | None = None,
+    job_title: str | None = None,
 ) -> str:
     if explicit_filename is not None:
         normalized = _normalize_output_cv_filename(explicit_filename)
@@ -84,6 +107,10 @@ def resolve_output_cv_filename(
     configured = _normalize_output_cv_filename(os.getenv(OUTPUT_CV_FILENAME_ENV))
     if configured:
         return configured
+
+    derived = _derive_output_cv_filename(company_name, job_title)
+    if derived:
+        return derived
 
     return DEFAULT_OUTPUT_CV_FILENAME
 
