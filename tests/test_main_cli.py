@@ -12,9 +12,11 @@ from main import (
     _configure_cache_runtime_context,
     _ensure_regenerate_allowed,
     _load_existing_run_job_description,
+    _load_metadata_or_default,
     _mark_sections_for_regeneration,
     _normalize_regeneration_note,
     _parse_requested_sections,
+    _resolve_command_options,
     _resolve_run_checkpoint_pair,
     _selected_variation_score,
 )
@@ -366,6 +368,32 @@ def test_output_filename_explicit_wins_over_derived(
         )
         == "custom.docx"
     )
+
+
+def test_first_run_derives_output_cv_filename_from_company_and_title(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: on a fresh run (no run_metadata.json yet), the resolved
+    filename must be derived from company + title, not the constant default."""
+    monkeypatch.delenv("ART_OUTPUT_CV_FILENAME", raising=False)
+    run_dir = tmp_path / "gr8tech_seniornetdeveloper"
+    run_dir.mkdir()
+    args = argparse.Namespace(
+        company="Gr8Tech",
+        job_title="SeniorNetDeveloper",
+        model=None,
+        debug=False,
+    )
+    metadata = _load_metadata_or_default(run_dir, args)
+    options = _resolve_command_options(
+        metadata=metadata,
+        input_profile="role_engineer",
+        explicit_model=None,
+        explicit_template=None,
+        explicit_skills_category_count=None,
+        force_debug_mode=False,
+    )
+    assert options.output_cv_filename == "Gr8Tech - SeniorNetDeveloper.docx"
 
 
 def test_output_filename_sanitizes_illegal_chars(

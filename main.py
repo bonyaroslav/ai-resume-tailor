@@ -361,7 +361,6 @@ def _load_metadata_or_default(
             "company_name": args.company,
             "job_title": getattr(args, "job_title", None) or "",
             "model_name": resolve_gemini_model_name(args.model),
-            "output_cv_filename": resolve_output_cv_filename(),
             "debug_mode": str(bool(args.debug)).lower(),
         }
     return metadata
